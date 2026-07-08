@@ -212,6 +212,32 @@ details.foldable summary::-webkit-details-marker{display:none;}
 #toast{position:fixed;left:50%;bottom:calc(var(--safeb) + 88px);transform:translateX(-50%) translateY(20px);background:var(--ink3);border:1px solid var(--line);color:var(--bone);padding:12px 18px;border-radius:13px;font-size:14px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.4);white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 #toast.good{border-color:var(--gold-dim);}
+/* ===== Liquid glass pass ===== */
+body{background:#0c0b09;}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(130% 80% at 50% -12%, rgba(231,180,90,.11), transparent 58%),
+    radial-gradient(100% 60% at 108% 2%, rgba(130,140,180,.06), transparent 55%),
+    radial-gradient(90% 70% at -10% 100%, rgba(231,180,90,.05), transparent 60%),
+    linear-gradient(180deg,#151310 0%,#0e0d0a 55%,#0b0a08 100%);}
+:root{--glass:rgba(30,27,21,.5);--rim:inset 0 1px 0 rgba(255,255,255,.06),inset 0 0 0 1px rgba(255,255,255,.02);}
+.card,.sblk,.row,.mcard,.acctpill,.seg,.nlfield,.btn.ghost,.iconbtn,.key,.chip{
+  background:var(--glass);backdrop-filter:blur(18px) saturate(1.35);-webkit-backdrop-filter:blur(18px) saturate(1.35);
+  border-color:rgba(255,255,255,.075);box-shadow:var(--rim);}
+.key:active,.row:active,.btn.ghost:active,.iconbtn:active{background:rgba(52,47,37,.55);}
+.chip.on{background:rgba(231,180,90,.12);border-color:var(--gold-dim);}
+.acctpill .nm.tdc{color:var(--gold);}
+.head{background:linear-gradient(180deg,rgba(12,11,9,.82),rgba(12,11,9,.35) 72%,transparent);
+  backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);}
+.tabbar{background:rgba(12,11,9,.6);backdrop-filter:blur(24px) saturate(1.4);-webkit-backdrop-filter:blur(24px) saturate(1.4);border-top-color:rgba(255,255,255,.06);}
+.sheet{background:rgba(20,18,14,.8);backdrop-filter:blur(34px) saturate(1.5);-webkit-backdrop-filter:blur(34px) saturate(1.5);border-color:rgba(255,255,255,.09);}
+.sheetbg{background:rgba(5,5,3,.5);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);}
+.btn.primary{background:linear-gradient(180deg,#efc275,#e0a94e);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 8px 22px rgba(224,169,78,.16);}
+.micbtn{background:linear-gradient(180deg,#efc275,#e0a94e);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 8px 22px rgba(224,169,78,.16);}
+.hero{padding:8px 0 4px;overflow:hidden;}
+.hero .amt{font-size:100px;text-shadow:0 2px 40px rgba(231,180,90,.12);white-space:nowrap;}
+.hero .amt .cur{font-size:44px;transform:translateY(-19px);}
+.export-prev,.export-ta{background:rgba(10,9,7,.5);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
 </style>
 </head>
 <body>
@@ -591,6 +617,7 @@ function extractPlace(text){
   if(!m) return "";
   var words=m[1].split(" "), out=[];
   for(var i=0;i<words.length;i++){ var wd=words[i]; if(!wd) continue;
+    if(/^\d+$/.test(wd)) break;
     if(PLACE_STOP[wd]||aliasIn(wd)) break; if(out.length>=3) break; out.push(wd); }
   return out.map(titleWord).join(" ");
 }
@@ -926,25 +953,37 @@ function padBack(){ V.amt=V.amt.slice(0,-1); refreshHero(); }
 function refreshHero(){ var el=document.querySelector(".hero .amt"); if(el){ el.className="amt"+(V.amt?"":" zero"); el.innerHTML='<span class="cur">$</span>'+heroAmt(); } }
 function currentAmount(){ var n=parseFloat(V.amt); return isNaN(n)?0:Math.round(n*100)/100; }
 function focusNL(){ var el=document.getElementById("nlText"); if(el){ el.focus(); } }
-var recog=null;
+var recog=null, recognizing=false, dictBuffer="";
+function setMicState(on){ var b=document.querySelector(".micbtn"); if(b) b.style.background=on?"var(--red)":""; }
 function startDictation(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ focusNL(); toast("Toca 🎤 en tu teclado para dictar"); return; }
+  if(recognizing){ stopDictation(); return; }         // 2º toque = parar y analizar
   try{
-    if(recog){ try{recog.stop();}catch(e){} recog=null; }
-    recog=new SR(); recog.lang="es-MX"; recog.interimResults=false; recog.maxAlternatives=1;
-    var btn=document.querySelector(".micbtn"); if(btn) btn.style.background="var(--red)";
-    toast("Escuchando…");
-    recog.onresult=function(ev){ var txt=ev.results[0][0].transcript||""; var el=document.getElementById("nlText"); if(el) el.value=txt; interpret(); };
-    recog.onerror=function(e){ if(e&&e.error==="not-allowed"){ toast("Permite el micrófono en Ajustes de Safari"); } else { focusNL(); } };
-    recog.onend=function(){ var b=document.querySelector(".micbtn"); if(b) b.style.background=""; recog=null; };
+    recog=new SR(); recog.lang="es-MX"; recog.continuous=true; recog.interimResults=true; recog.maxAlternatives=1;
+    dictBuffer=""; recognizing=true; setMicState(true);
+    recog.onresult=function(ev){
+      var fin="", intr="";
+      for(var i=ev.resultIndex;i<ev.results.length;i++){ var r=ev.results[i]; if(r.isFinal) fin+=r[0].transcript+" "; else intr+=r[0].transcript; }
+      if(fin) dictBuffer+=fin;
+      var el=document.getElementById("nlText"); if(el) el.value=(dictBuffer+intr).trim();
+    };
+    recog.onerror=function(e){ recognizing=false; setMicState(false); if(e&&e.error==="not-allowed") toast("Permite el micrófono en Safari"); };
+    recog.onend=function(){ recognizing=false; setMicState(false); var el=document.getElementById("nlText"); if(el&&el.value.trim()) interpret(); };
     recog.start();
-  }catch(e){ focusNL(); }
+    toast("Escuchando… toca 🎤 otra vez para analizar");
+  }catch(e){ recognizing=false; setMicState(false); focusNL(); }
 }
+function stopDictation(){ if(recog){ try{recog.stop();}catch(e){} } }
 
 function quickSave(){
+  if(recognizing){ stopDictation(); return; }
   var amt=currentAmount();
-  if(amt<=0){ toast("Escribe un monto"); return; }
+  if(amt<=0){
+    var nl=document.getElementById("nlText");
+    if(nl && nl.value.trim()){ interpret(); return; }   // procesa lo dictado/escrito
+    toast("Escribe un monto o dicta"); return;
+  }
   if(V.mode==="Transferencia"){
     if(V.xferFrom===V.xferTo){ toast("Elige cuentas distintas"); return; }
     commitTransfer({date:E.todayISO(),amount:amt,fromAccount:V.xferFrom,toAccount:V.xferTo,details:"",msi:1});
@@ -1225,7 +1264,7 @@ function supaBlock(){
 }
 
 /* ============ SHEET (crear/editar) ============ */
-var draft=null,draftId=null;
+var draft=null,draftId=null,draftMultiIndex=null;
 function openEdit(id){ V.prevTab=V.tab; openSheet(null,id,"Editar"); }
 function openSheet(pre,id,title,transferPre){
   if(id){ var e=DB.entries[id]; if(!e) return;
@@ -1258,7 +1297,7 @@ function renderSheet(title){
     '<input class="amt-edit" id="dfAmt" inputmode="decimal" value="'+esc(d.amount||"")+'" placeholder="0" oninput="draft.amount=parseFloat(this.value.replace(/[^0-9.]/g,\'\'))||0">'+
     body+
     '<div class="field"><div class="fl">Fecha</div><input id="dfDate" type="date" value="'+esc(d.date)+'" oninput="draft.date=this.value"></div>'+
-    '<div class="sheetbtns">'+(draftId?'<button class="btn ghost" style="flex:0 0 46px" onclick="deleteEntry()">'+ico("del",20)+'</button>':'')+
+    '<div class="sheetbtns">'+(draftId?'<button class="btn ghost" style="flex:0 0 44px" onclick="deleteEntry()">'+ico("del",20)+'</button><button class="btn ghost" style="flex:0 0 44px" onclick="duplicateEntry()">'+ico("copy",19)+'</button>':'')+
     '<button class="btn ghost" onclick="closeSheet()">Cancelar</button><button class="btn primary" onclick="saveSheet()">Guardar</button></div></div></div>';
 }
 function acctBtnInline(which,name){ return '<button class="acctpill" onclick="pickAccountFor(\''+which+'\')"><span class="nm'+(E.isTDC(name)?" tdc":"")+'">'+esc(name)+'</span>'+ico("chevD",16)+'</button>'; }
@@ -1270,19 +1309,20 @@ function catPickerHTML(sel){
 function draftType(t){ draft.type=t; if(t==="Ingreso") draft.expenseType=""; else if(draft.category) draft.expenseType=etFor(draft.category,"Egreso"); renderSheet(draftId?"Editar":"Registro"); }
 function draftET(v){ draft.expenseType=v; renderSheet(draftId?"Editar":"Registro"); }
 function draftCat(c){ c=unq(c); draft.category=c; var CM=E.catsMap(); var k=CM[c]?CM[c].kind:"out"; if(k==="in")draft.type="Ingreso"; else if(k==="out")draft.type="Egreso"; draft.expenseType=etFor(c,draft.type); renderSheet(draftId?"Editar":"Registro"); }
-function closeSheet(){ document.getElementById("sheetroot").innerHTML=""; draft=null; draftId=null; }
+function closeSheet(){ if(draftMultiIndex!=null){ draftMultiIndex=null; draft=null; draftId=null; renderMulti(); return; } document.getElementById("sheetroot").innerHTML=""; draft=null; draftId=null; }
 function saveSheet(){
   var d=draft;
   if(!(d.amount>0)){ toast("Falta el monto"); return; }
-  if(d.kind==="transfer"){
-    if(d.fromAccount===d.toAccount){ toast("Elige cuentas distintas"); return; }
-    commitTransfer({date:d.date,amount:Math.round(d.amount*100)/100,fromAccount:d.fromAccount,toAccount:d.toAccount,details:(d.details||"").trim(),msi:d.msi||1},draftId);
-  } else {
-    if(!d.category){ toast("Elige una categoría"); return; }
-    commitTxn({date:d.date,amount:Math.round(d.amount*100)/100,type:d.type,category:d.category,account:d.account,place:(d.place||"").trim(),details:(d.details||"").trim(),expenseType:d.expenseType||"",msi:E.isTDC(d.account)?(d.msi||1):1},draftId);
-  }
+  if(d.kind==="transfer"){ if(d.fromAccount===d.toAccount){ toast("Elige cuentas distintas"); return; } }
+  else if(!d.category){ toast("Elige una categoría"); return; }
+  var obj = d.kind==="transfer"
+    ? {kind:"transfer",date:d.date,amount:Math.round(d.amount*100)/100,fromAccount:d.fromAccount,toAccount:d.toAccount,details:(d.details||"").trim(),msi:d.msi||1}
+    : {kind:"txn",date:d.date,amount:Math.round(d.amount*100)/100,type:d.type,category:d.category,account:d.account,place:(d.place||"").trim(),details:(d.details||"").trim(),expenseType:d.expenseType||"",msi:E.isTDC(d.account)?(d.msi||1):1};
+  if(draftMultiIndex!=null){ multi[draftMultiIndex]=obj; draftMultiIndex=null; draft=null; draftId=null; renderMulti(); return; }
+  if(obj.kind==="transfer") commitTransfer(obj,draftId); else commitTxn(obj,draftId);
   closeSheet(); V.amt=""; V.cat=null; render(); toast("Guardado ✔",true);
 }
+function duplicateEntry(){ if(!draftId){ toast("Guarda primero"); return; } var e=DB.entries[draftId]; if(!e) return; var nid=uid(); var copy=Object.assign({},e); copy.id=nid; copy.createdAt=Date.now(); copy.updatedAt=Date.now(); copy.exported=false; copy.deleted=false; DB.entries[nid]=copy; save(); closeSheet(); render(); toast("Duplicado ✔",true); }
 function deleteEntry(){ if(!draftId) return; if(!confirm("¿Borrar este registro?")) return; var e=DB.entries[draftId]; if(e){ e.deleted=true; e.updatedAt=Date.now(); } save(); closeSheet(); render(); toast("Borrado"); }
 
 /* ---- multi ---- */
@@ -1294,15 +1334,21 @@ function openMulti(drafts){
   });
   renderMulti();
 }
+function fmtShort(iso){ try{ return E.fromISO(iso).toLocaleDateString("es-MX",{day:"numeric",month:"short"}); }catch(e){ return iso; } }
+function openMultiEdit(i){ var m=multi[i]; if(!m) return; draftMultiIndex=i; draft=Object.assign({},m); draftId=null; renderSheet(m.kind==="transfer"?"Editar transferencia":"Editar movimiento"); }
 function renderMulti(){
   var cards=multi.map(function(m,i){
-    if(m.kind==="transfer") return '<div class="mcard"><div class="top"><div>'+esc(m.fromAccount)+' → '+esc(m.toAccount)+'</div><div class="a">'+esc(money(m.amount))+'</div></div><button class="rm" onclick="rmMulti('+i+')">Quitar</button></div>';
-    var opts=E.catList().map(function(c){return '<option value="'+esc(c)+'"'+(m.category===c?" selected":"")+'>'+esc(c)+'</option>';}).join("");
-    return '<div class="mcard"><div class="top"><div style="font-size:13px;color:var(--dim)">'+esc(m.account)+' · '+esc(m.type)+'</div><div class="a">'+esc(money(m.amount))+'</div></div>'+
-      '<select onchange="multi['+i+'].category=this.value;multi['+i+'].expenseType=(multi['+i+'].type===\'Egreso\'?etFor(this.value,\'Egreso\'):\'\')">'+opts+'</select>'+
-      '<button class="rm" style="margin-top:8px" onclick="rmMulti('+i+')">Quitar</button></div>';
+    var head,extra="";
+    if(m.kind==="transfer"){ head='<div style="font-size:13px;color:var(--dim)">'+esc(m.fromAccount)+' → '+esc(m.toAccount)+(E.isTDC(m.toAccount)?' · pago TDC':'')+' · '+esc(fmtShort(m.date))+'</div>'; }
+    else{
+      head='<div style="font-size:13px;color:var(--dim)">'+esc(m.account)+' · '+esc(m.type)+' · '+esc(fmtShort(m.date))+'</div>';
+      var opts=E.catList().map(function(c){return '<option value="'+esc(c)+'"'+(m.category===c?" selected":"")+'>'+esc(c)+'</option>';}).join("");
+      extra='<select onchange="multi['+i+'].category=this.value;multi['+i+'].expenseType=(multi['+i+'].type===\'Egreso\'?etFor(this.value,\'Egreso\'):\'\')">'+opts+'</select>';
+    }
+    return '<div class="mcard"><div class="top" onclick="openMultiEdit('+i+')" style="cursor:pointer">'+head+'<div class="a">'+esc(money(m.amount))+'</div></div>'+extra+
+      '<div style="display:flex;gap:14px;margin-top:9px"><button class="rm" style="color:var(--gold)" onclick="openMultiEdit('+i+')">Editar detalle</button><button class="rm" onclick="rmMulti('+i+')">Quitar</button></div></div>';
   }).join("");
-  document.getElementById("sheetroot").innerHTML='<div class="sheetwrap"><div class="sheetbg" onclick="closeMulti()"></div><div class="sheet"><div class="grab"></div><h2>'+multi.length+' movimientos</h2><p style="font-size:13px;color:var(--dim);margin:0 0 12px">Revisa y guarda todos de una.</p>'+cards+'<div class="sheetbtns"><button class="btn ghost" onclick="closeMulti()">Cancelar</button><button class="btn primary" onclick="saveMulti()">Guardar '+multi.length+'</button></div></div></div>';
+  document.getElementById("sheetroot").innerHTML='<div class="sheetwrap"><div class="sheetbg" onclick="closeMulti()"></div><div class="sheet"><div class="grab"></div><h2>'+multi.length+' movimientos</h2><p style="font-size:13px;color:var(--dim);margin:0 0 12px">Toca uno para editar todo (monto, fecha, cuenta, descripción…). Luego guarda todos.</p>'+cards+'<div class="sheetbtns"><button class="btn ghost" onclick="closeMulti()">Cancelar</button><button class="btn primary" onclick="saveMulti()">Guardar '+multi.length+'</button></div></div></div>';
 }
 function rmMulti(i){ multi.splice(i,1); if(!multi.length){ closeMulti(); return; } renderMulti(); }
 function closeMulti(){ document.getElementById("sheetroot").innerHTML=""; multi=[]; }
