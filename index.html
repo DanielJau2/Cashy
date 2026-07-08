@@ -234,21 +234,22 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
 .sheetbg{background:rgba(5,5,3,.5);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);}
 .btn.primary{background:linear-gradient(180deg,#efc275,#e0a94e);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 8px 22px rgba(224,169,78,.16);}
 .micbtn{background:linear-gradient(180deg,#efc275,#e0a94e);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 8px 22px rgba(224,169,78,.16);}
-.hero{padding:8px 0 4px;overflow:hidden;}
-.hero .amt{font-size:100px;text-shadow:0 2px 40px rgba(231,180,90,.12);white-space:nowrap;}
-.hero .amt .cur{font-size:44px;transform:translateY(-19px);}
+.hero{padding:12px 0 6px;overflow:visible;position:relative;min-height:122px;display:flex;flex-direction:column;justify-content:center;}
+.hero .amt{font-size:76px;line-height:1.32;transform:scaleY(1.42);transform-origin:center;text-shadow:0 2px 40px rgba(231,180,90,.12);white-space:nowrap;}
+.hero .amt .cur{font-size:36px;transform:translateY(-12px);}
 .export-prev,.export-ta{background:rgba(10,9,7,.5);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
 
-/* micrófono grande y prominente */
-.micbig{width:100%;padding:15px;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:10px;
-  font-size:16px;font-weight:800;letter-spacing:.02em;color:#241a08;
-  background:linear-gradient(180deg,#efc275,#e0a94e);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 8px 22px rgba(224,169,78,.18);}
-.micbig:active{filter:brightness(.95);}
-.micbig svg{width:23px;height:23px;}
-.micbig.rec{background:linear-gradient(180deg,#e79079,#d75f45);color:#2a0f08;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 26px rgba(215,95,69,.28);animation:pulse 1.4s ease-in-out infinite;}
-@keyframes pulse{0%,100%{box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 26px rgba(215,95,69,.22);}50%{box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 34px rgba(215,95,69,.42);}}
-.nlfield2{width:100%;background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.075);
-  box-shadow:var(--rim);border-radius:14px;padding:12px 14px;font-size:15px;margin-top:9px;}
+/* micrófono circular al costado */
+.miccirc{position:absolute;left:2px;top:50%;transform:translateY(-50%);width:58px;height:58px;border-radius:50%;
+  display:grid;place-items:center;color:#241a08;background:linear-gradient(180deg,#efc275,#e0a94e);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 8px 22px rgba(224,169,78,.22);}
+.miccirc:active{filter:brightness(.95);}
+.miccirc svg{width:27px;height:27px;}
+.miccirc.rec{background:linear-gradient(180deg,#e79079,#d75f45);color:#2a0f08;animation:pulse 1.4s ease-in-out infinite;}
+@keyframes pulse{0%,100%{box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 22px rgba(215,95,69,.22);}50%{box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 32px rgba(215,95,69,.5);}}
+.nlfield2{display:block;width:100%;background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid rgba(255,255,255,.075);box-shadow:var(--rim);border-radius:14px;padding:12px 14px;font-size:15px;
+  line-height:1.45;resize:none;overflow:hidden;min-height:46px;font-family:var(--fb);}
 
 /* barra superior del sheet */
 .sheethead{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:10px;
@@ -1008,9 +1009,12 @@ function viewReg(){
     '<div class="regpage">'+
       '<div class="seg">'+seg+'</div>'+
       acctUI+
-      '<div class="hero"><div class="lbl">'+lbl+'</div><div class="amt'+(V.amt?"":" zero")+'"><span class="cur">$</span>'+heroAmt()+'</div></div>'+
-      '<button class="micbig" id="micBig" onclick="startDictation()">'+ico("mic",23)+' <span>Dictar</span></button>'+
-      '<input class="nlfield2" id="nlText" placeholder="o escribe: «50 en tacos ayer»" enterkeyhint="go" onkeydown="if(event.key===\'Enter\')interpret()">'+
+      '<div class="hero">'+
+        '<button class="miccirc" id="micBig" onclick="startDictation()">'+ico("mic",27)+'</button>'+
+        '<div class="lbl">'+lbl+'</div>'+
+        '<div class="amt'+(V.amt?"":" zero")+'"><span class="cur">$</span>'+heroAmt()+'</div>'+
+      '</div>'+
+      '<textarea class="nlfield2" id="nlText" rows="1" placeholder="escribe o dicta: «50 en tacos ayer»" oninput="autoGrow(this)" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();interpret();}"></textarea>'+
       chips+
       '<div class="pad">'+pad+'</div>'+
       '<button class="btn primary" onclick="quickSave()">'+ico("check",20)+' Guardar</button>'+
@@ -1040,8 +1044,9 @@ function focusNL(){ var el=document.getElementById("nlText"); if(el){ el.focus()
 var recog=null, recognizing=false, dictBuffer="";
 function setMicState(on){
   var b=document.getElementById("micBig");
-  if(b){ b.classList.toggle("rec",on); b.innerHTML=(on?ico("stop",22)+' <span>Detener</span>':ico("mic",23)+' <span>Dictar</span>'); }
+  if(b){ b.classList.toggle("rec",on); b.innerHTML=(on?ico("stop",26):ico("mic",27)); }
 }
+function autoGrow(el){ if(!el) return; el.style.height="auto"; el.style.height=(el.scrollHeight)+"px"; }
 function startDictation(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ focusNL(); toast("Toca 🎤 en tu teclado para dictar"); return; }
@@ -1053,7 +1058,7 @@ function startDictation(){
       var fin="", intr="";
       for(var i=ev.resultIndex;i<ev.results.length;i++){ var r=ev.results[i]; if(r.isFinal) fin+=r[0].transcript+" "; else intr+=r[0].transcript; }
       if(fin) dictBuffer+=fin;
-      var el=document.getElementById("nlText"); if(el) el.value=(dictBuffer+intr).trim();
+      var el=document.getElementById("nlText"); if(el){ el.value=(dictBuffer+intr).trim(); autoGrow(el); }
     };
     recog.onerror=function(e){ recognizing=false; setMicState(false); if(e&&e.error==="not-allowed") toast("Permite el micrófono en Safari"); };
     recog.onend=function(){ recognizing=false; setMicState(false); var el=document.getElementById("nlText"); if(el&&el.value.trim()) interpret(); };
