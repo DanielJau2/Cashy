@@ -460,6 +460,20 @@ body.reg .head{position:static;flex:0 0 auto;background:none;margin-bottom:4px;}
 #lockwrap .lbrand{font-family:var(--fd);font-weight:800;font-size:30px;letter-spacing:-.02em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
 #lockwrap .btn{width:auto;padding:14px 26px;}
 
+/* ===== filtros compactos (Resumen) ===== */
+.seg.mini{padding:4px;border-radius:13px;gap:4px;}
+.seg.mini button{padding:7px 2px;font-size:12px;border-radius:9px;}
+
+/* ===== rango de fechas: layout que no se encima nunca ===== */
+.rangerow{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 2px;}
+.rangerow .field{flex:1 1 140px;min-width:0;margin:0;}
+.rangerow .field input{display:block;width:100%;min-width:0;height:42px;padding:0 12px;line-height:40px;}
+
+/* ===== cuenta pintada dentro del sheet ===== */
+.acctpill.solid{color:#fff;border:none;box-shadow:0 6px 14px rgba(0,0,0,.18);width:100%;justify-content:space-between;padding:12px 13px;border-radius:14px;font-size:14px;}
+.acctpill.solid .nm{color:#fff;font-weight:700;}
+.acctpill.solid svg{color:rgba(255,255,255,.9);}
+
 #toast{position:fixed;left:50%;bottom:calc(var(--safeb) + 96px);transform:translateX(-50%) translateY(20px);
   background:var(--panel);color:var(--text);padding:12px 18px;border-radius:16px;font-size:14px;font-weight:600;
   opacity:0;pointer-events:none;transition:.25s;z-index:60;box-shadow:0 12px 34px rgba(0,0,0,.25);white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;border:1px solid var(--line);}
@@ -1145,17 +1159,22 @@ function hexToHsl(hex){
   return {h:h,s:s*100,l:l*100};
 }
 function hsl(h,s,l){ return "hsl("+Math.round(((h%360)+360)%360)+","+Math.round(Math.max(0,Math.min(100,s)))+"%,"+Math.round(Math.max(0,Math.min(100,l)))+"%)"; }
-function applyAccent(){
-  var name=(V.tab==="reg"&&V.mode==="Transferencia")?V.xferFrom:V.account;
+function accentStops(name){
   var c=hexToHsl(colorFor(name||"Cash"));
   var dark=(DB.settings.theme==="dark");
   var s=c.s, l=c.l, h=c.h;
   if(s<10){ s=8; l=dark?46:34; } /* cuentas grises/negras: acento pizarra elegante */
   else { l=Math.max(dark?46:42, Math.min(64,l)); s=Math.max(45,Math.min(88,s)); }
   var a1=hsl(h+10,s,Math.min(78,l+12)), a2=hsl(h,s,l), a3=hsl(h-16,Math.min(92,s+6),Math.max(30,l-6));
+  return {a1:a1,a2:a2,a3:a3,grad:"linear-gradient(155deg,"+a1+" 0%,"+a2+" 55%,"+a3+" 100%)"};
+}
+function gradFor(name){ return accentStops(name).grad; }
+function applyAccent(){
+  var name=(V.tab==="reg"&&V.mode==="Transferencia")?V.xferFrom:V.account;
+  var a=accentStops(name);
   var st=document.documentElement.style;
-  st.setProperty("--acc",a2); st.setProperty("--acc2",a3); st.setProperty("--acc3",a1);
-  st.setProperty("--grad","linear-gradient(155deg,"+a1+" 0%,"+a2+" 55%,"+a3+" 100%)");
+  st.setProperty("--acc",a.a2); st.setProperty("--acc2",a.a3); st.setProperty("--acc3",a.a1);
+  st.setProperty("--grad",a.grad);
 }
 
 /* ===== helpers ===== */
@@ -1423,8 +1442,8 @@ function viewHist(){
   else{ var last="",ri=0; arr.forEach(function(e){ if(e.date!==last){ last=e.date; body+='<div class="daygrp">'+esc(dayLabel(e.date))+'</div>'; } body+=entryRow(e,ri++); }); }
   var head = isR
     ? '<div class="sechead"><h3>Rango</h3><div class="nav"><button style="width:auto;padding:0 10px;font-size:12px" onclick="V.histMode=\'mes\';render()">Por mes</button></div></div>'+
-      '<div class="twocol" style="margin-bottom:12px"><div class="field" style="flex:1;margin:0"><div class="fl">Desde</div><input type="date" value="'+esc(V.histFrom||"")+'" oninput="V.histFrom=this.value;render()"></div>'+
-      '<div class="field" style="flex:1;margin:0"><div class="fl">Hasta</div><input type="date" value="'+esc(V.histTo||"")+'" oninput="V.histTo=this.value;render()"></div></div>'
+      '<div class="rangerow" style="margin-bottom:12px"><div class="field"><div class="fl">Desde</div><input type="date" value="'+esc(V.histFrom||"")+'" oninput="V.histFrom=this.value;render()"></div>'+
+      '<div class="field"><div class="fl">Hasta</div><input type="date" value="'+esc(V.histTo||"")+'" oninput="V.histTo=this.value;render()"></div></div>'
     : '<div class="sechead"><h3><label class="monthpick" onclick="openDatePicker(event,\'histMonthIn\')">'+esc(cap(label))+ico("chevD",15)+
         '<input type="month" id="histMonthIn" value="'+esc(V.histMonth)+'" oninput="V.histMonth=this.value;render()"></label></h3>'+
       '<div class="nav"><button style="width:auto;padding:0 10px;font-size:12px" onclick="V.histMode=\'rango\';render()">Rango</button>'+
@@ -1516,12 +1535,12 @@ function viewResumen(){
   var total=rows.reduce(function(s,x){return s+x.total;},0);
 
   var periods=[["sem","Semana"],["mes","Mes"],["ano","Año"],["rango","Rango"]];
-  var pseg='<div class="seg">'+periods.map(function(p){return '<button class="'+(V.resPeriod===p[0]?"on out":"")+'" onclick="V.resPeriod=\''+p[0]+'\';render()">'+p[1]+'</button>';}).join("")+'</div>';
+  var pseg='<div class="seg mini" style="margin-top:6px">'+periods.map(function(p){return '<button class="'+(V.resPeriod===p[0]?"on out":"")+'" onclick="V.resPeriod=\''+p[0]+'\';render()">'+p[1]+'</button>';}).join("")+'</div>';
   var rangeUI = V.resPeriod==="rango"
-    ? '<div class="twocol" style="margin-top:10px"><div class="field" style="flex:1;margin:0"><div class="fl">Desde</div><input type="date" value="'+esc(V.resFrom)+'" oninput="V.resFrom=this.value;render()"></div><div class="field" style="flex:1;margin:0"><div class="fl">Hasta</div><input type="date" value="'+esc(V.resTo)+'" oninput="V.resTo=this.value;render()"></div></div>' : '';
+    ? '<div class="rangerow"><div class="field"><div class="fl">Desde</div><input type="date" value="'+esc(V.resFrom)+'" oninput="V.resFrom=this.value;render()"></div><div class="field"><div class="fl">Hasta</div><input type="date" value="'+esc(V.resTo)+'" oninput="V.resTo=this.value;render()"></div></div>' : '';
   var dims=[["cat","Categoría"],["acct","Cuenta"],["et","Vital/Extra"]];
-  var dseg='<div class="seg" style="margin-top:10px">'+dims.map(function(x){return '<button class="'+(V.resDim===x[0]?"on out":"")+'" onclick="V.resDim=\''+x[0]+'\';render()">'+x[1]+'</button>';}).join("")+'</div>';
-  var kseg = isEt? '' : '<div class="seg" style="margin-top:10px"><button class="'+(V.resKind==="Egreso"?"on out":"")+'" onclick="V.resKind=\'Egreso\';render()">Gastos</button><button class="'+(V.resKind==="Ingreso"?"on in":"")+'" onclick="V.resKind=\'Ingreso\';render()">Ingresos</button></div>';
+  var dseg='<div class="seg mini" style="margin-top:6px">'+dims.map(function(x){return '<button class="'+(V.resDim===x[0]?"on out":"")+'" onclick="V.resDim=\''+x[0]+'\';render()">'+x[1]+'</button>';}).join("")+'</div>';
+  var kseg = isEt? '' : '<div class="seg mini" style="margin-top:6px"><button class="'+(V.resKind==="Egreso"?"on out":"")+'" onclick="V.resKind=\'Egreso\';render()">Gastos</button><button class="'+(V.resKind==="Ingreso"?"on in":"")+'" onclick="V.resKind=\'Ingreso\';render()">Ingresos</button></div>';
 
   var isIn=(kind==="Ingreso");
   var bars = rows.length? rows.map(function(x,i){
@@ -1532,7 +1551,7 @@ function viewResumen(){
   }).join("") : '<div class="empty"><div class="big">Sin datos</div>No hay movimientos en este periodo.</div>';
 
   var views=[["bars","Barras"],["dona","Dona"],["line","Tendencia"],["cal","Calendario"]];
-  var vseg='<div class="seg" style="margin-top:10px">'+views.map(function(x){return '<button class="'+(V.resView===x[0]?"on out":"")+'" onclick="V.resView=\''+x[0]+'\';render()">'+x[1]+'</button>';}).join("")+'</div>';
+  var vseg='<div class="seg mini">'+views.map(function(x){return '<button class="'+(V.resView===x[0]?"on out":"")+'" onclick="V.resView=\''+x[0]+'\';render()">'+x[1]+'</button>';}).join("")+'</div>';
 
   if(V.resView==="cal") return header("Resumen")+vseg+weekCompareCard()+calView();
   var chart;
@@ -1540,13 +1559,13 @@ function viewResumen(){
   else if(V.resView==="line") chart=trendView(from,to,kind);
   else chart=bars;
 
+  var isLine=(V.resView==="line");
   return header("Resumen")+
-    vseg+ pseg2(pseg)+ rangeUI+ dseg+ kseg+
-    '<div class="card" style="text-align:center;padding:16px;margin-top:14px"><div class="k" style="font-size:12px;color:var(--faint);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">'+(isEt?"Total gastado":(isIn?"Total ingresos":"Total gastado"))+' · '+esc(resLabel())+'</div><div style="font-family:var(--fd);font-size:40px;letter-spacing:.02em;'+(isIn?"color:var(--green)":"")+'">'+esc(money(total))+'</div></div>'+
-    weekCompareCard()+
-    chart;
+    vseg+ pseg+ rangeUI+ (isLine?"":dseg)+ kseg+
+    '<div class="card" style="text-align:center;padding:12px;margin-top:10px"><div class="k" style="font-size:11px;color:var(--faint);letter-spacing:.05em;text-transform:uppercase;margin-bottom:2px">'+(isEt?"Total gastado":(isIn?"Total ingresos":"Total gastado"))+' · '+esc(resLabel())+'</div><div style="font-family:var(--fd);font-size:32px;letter-spacing:.02em;'+(isIn?"color:var(--green)":"")+'">'+esc(money(total))+'</div></div>'+
+    chart+
+    weekCompareCard();
 }
-function pseg2(pseg){ return pseg.replace('class="seg"','class="seg" style="margin-top:10px"'); }
 /* --- comparativa semanal --- */
 function sumEgreso(from,to){
   var t=0; E.activeEntries(DB.entries).forEach(function(e){ if(e.kind==="txn"&&e.type==="Egreso"&&E.inRange(e.date,from,to)) t+=e.amount||0; });
@@ -1671,8 +1690,8 @@ function viewExport(){
   var scopes=[["pend","Pendientes"],["mes","Este mes"],["rango","Rango"],["all","Todo"]];
   var seg=scopes.map(function(s){return '<button class="'+(V.expScope===s[0]?"on out":"")+'" onclick="V.expScope=\''+s[0]+'\';render()">'+s[1]+'</button>';}).join("");
   var rangeUI = V.expScope==="rango"
-    ? '<div class="twocol" style="margin:12px 0 0"><div class="field" style="flex:1;margin:0"><div class="fl">Desde</div><input type="date" value="'+esc(V.expFrom)+'" oninput="V.expFrom=this.value;render()"></div>'+
-      '<div class="field" style="flex:1;margin:0"><div class="fl">Hasta</div><input type="date" value="'+esc(V.expTo)+'" oninput="V.expTo=this.value;render()"></div></div>' : '';
+    ? '<div class="rangerow" style="margin:12px 0 0"><div class="field"><div class="fl">Desde</div><input type="date" value="'+esc(V.expFrom)+'" oninput="V.expFrom=this.value;render()"></div>'+
+      '<div class="field"><div class="fl">Hasta</div><input type="date" value="'+esc(V.expTo)+'" oninput="V.expTo=this.value;render()"></div></div>' : '';
   var arr=scopeEntries();
   var tsvN=E.tsvForTab(arr,"normal",false), tsvT=E.tsvForTab(arr,"tdc",false);
   var nN=tsvN?tsvN.split("\n").length:0, nT=tsvT?tsvT.split("\n").length:0;
@@ -2050,7 +2069,7 @@ function pickPlace(n){ n=unq(n); draft.place=n;
   buzz(5);
 }
 function hideSugSoon(){ setTimeout(function(){ var el=document.getElementById("plSug"); if(el){ el.className="suglist hide"; } },160); }
-function acctBtnInline(which,name){ return '<button class="acctpill" onclick="pickAccountFor(\''+which+'\')"><span class="nm'+(E.isTDC(name)?" tdc":"")+'">'+esc(name)+'</span>'+ico("chevD",16)+'</button>'; }
+function acctBtnInline(which,name){ return '<button class="acctpill solid" style="background:'+gradFor(name)+'" onclick="pickAccountFor(\''+which+'\')"><span class="nm">'+esc(name)+'</span>'+ico("chevD",16)+'</button>'; }
 var catOpen=false, catQ="";
 function catPickerHTML(sel){
   return '<div class="catdd">'+
