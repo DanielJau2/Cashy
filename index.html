@@ -365,6 +365,8 @@ body.reg .head{position:static;flex:0 0 auto;background:none;margin-bottom:4px;}
 .sheet{animation:up .26s cubic-bezier(.2,.9,.3,1);}
 .sheetwrap.closing .sheetbg{opacity:0;}
 .sheetwrap.closing .sheet{transition:transform .2s cubic-bezier(.5,0,.8,.5);transform:translateY(105%)!important;animation:none;}
+.sheetwrap.rerender .sheet{animation:none;}
+.sheetwrap.rerender .sheetbg{animation:none;opacity:1;}
 
 /* ===== spotlight (buscar deslizando hacia abajo) ===== */
 .spotwrap{position:fixed;inset:0;z-index:55;display:flex;flex-direction:column;align-items:center;
@@ -1622,7 +1624,7 @@ function viewReg(){
           '<div class="amt'+(V.amt?"":" zero")+heroSize()+'"><span class="cur">$</span>'+heroAmt()+'</div>'+
         '</div>'+
         '<div class="dictrow">'+
-          '<textarea class="nlfield2" id="nlText" rows="1" placeholder="escribe o dicta: «50 en tacos ayer»" oninput="autoGrow(this)" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();interpret();}"></textarea>'+
+          '<textarea class="nlfield2" id="nlText" rows="1" placeholder="escribe o dicta: «50 en tacos ayer»" oninput="autoGrow(this)" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();this.blur();interpret();}"></textarea>'+
           '<button class="miccirc" id="micBig" onclick="startDictation()">'+ico("mic",24)+'</button>'+
         '</div>'+
       '</div>'+
@@ -2432,7 +2434,7 @@ function setAccentColor(h){ DB.settings.accentMode="fixed"; DB.settings.accentCo
 
 /* ============ SHEET (crear/editar) ============ */
 var draft=null,draftId=null,draftMultiIndex=null;
-var __swy=null,__swSh=null;
+var __swy=null,__swSh=null,__swAtTop=false,__swInner=null;
 function sheetShell(closer,inner){
   window.__sheetCloser=closer;
   return '<div class="sheetwrap"><div class="sheetbg" onclick="'+closer+'()"></div>'+
@@ -2445,14 +2447,21 @@ function dismissSheet(){
   wrap.classList.add("closing");
   setTimeout(function(){ if(wrap.parentNode===root) root.removeChild(wrap); },200);
 }
-function swipeStart(ev){ __swy=(ev.touches&&ev.touches[0]?ev.touches[0].clientY:null); __swSh=ev.currentTarget&&ev.currentTarget.closest?ev.currentTarget.closest(".sheet"):null; }
-function swipeMove(ev){ if(__swy==null||!__swSh) return; var y=(ev.touches&&ev.touches[0])?ev.touches[0].clientY:__swy; var dy=y-__swy;
-  if(__swSh.scrollTop<=0 && dy>0){
-    var t=ev.target, innerScroll=(t&&t.closest)?t.closest(".catgrid,.acctlist,textarea"):null;
-    if(innerScroll && innerScroll.scrollTop>0) return; /* deja scrollear la lista interna */
-    __swSh.style.transform="translateY("+Math.min(dy,150)+"px)"; if(dy>8 && ev.cancelable) ev.preventDefault();
+function swipeStart(ev){ __swy=(ev.touches&&ev.touches[0]?ev.touches[0].clientY:null); __swSh=ev.currentTarget&&ev.currentTarget.closest?ev.currentTarget.closest(".sheet"):null;
+  /* solo se puede arrastrar-para-cerrar si el gesto EMPIEZA con el sheet en el tope;
+     si empieza a media lista, todo el gesto es scroll (no cierra "sin querer") */
+  __swAtTop=!!(__swSh && __swSh.scrollTop<=0);
+  var t=ev.target; __swInner=(t&&t.closest)?t.closest(".catgrid,.acctlist,textarea"):null;
+}
+function swipeMove(ev){ if(__swy==null||!__swSh||!__swAtTop) return; var y=(ev.touches&&ev.touches[0])?ev.touches[0].clientY:__swy; var dy=y-__swy;
+  if(dy>0){
+    if(__swInner && __swInner.scrollTop>0) return; /* deja scrollear la lista interna */
+    var pull=Math.max(0,dy-14); /* zona muerta: toques y micro-arrastres no mueven el sheet */
+    if(pull>0){ __swSh.style.transform="translateY("+Math.min(pull,170)+"px)"; if(ev.cancelable) ev.preventDefault(); }
   } }
-function swipeEnd(ev,closer){ if(__swy==null) return; var y=(ev.changedTouches&&ev.changedTouches[0])?ev.changedTouches[0].clientY:__swy; var dy=y-__swy; var sh=__swSh; __swy=null; __swSh=null; if(sh){ sh.style.transition="transform .18s ease"; sh.style.transform=""; setTimeout(function(){ sh.style.transition=""; },200); } if(dy>90 && typeof window[closer]==="function") window[closer](); }
+function swipeEnd(ev,closer){ if(__swy==null) return; var y=(ev.changedTouches&&ev.changedTouches[0])?ev.changedTouches[0].clientY:__swy; var dy=y-__swy; var atTop=__swAtTop; var sh=__swSh; __swy=null; __swSh=null; __swAtTop=false; __swInner=null;
+  if(sh){ sh.style.transition="transform .18s ease"; sh.style.transform=""; setTimeout(function(){ sh.style.transition=""; },200); }
+  if(atTop && dy>130 && typeof window[closer]==="function") window[closer](); }
 function openEdit(id){ V.prevTab=V.tab; openSheet(null,id,"Editar"); }
 function openSheet(pre,id,title,transferPre){
   if(id){ var e=DB.entries[id]; if(!e) return;
@@ -2507,6 +2516,7 @@ function renderSheet(title){
         '</div></div>':'');
   }
   var root=document.getElementById("sheetroot");
+  var prevSheet=root.querySelector(".sheet"), prevScroll=prevSheet?prevSheet.scrollTop:0;
   var actions=(draftId?'<button class="shbtn danger" onclick="deleteEntry()">'+ico("trash",19)+'</button><button class="shbtn" onclick="duplicateEntry()">'+ico("copy",18)+'</button>':'')+'<button class="shbtn save" onclick="saveSheet()">'+ico("check",20)+'</button>';
   var t=E.todayISO(), y=E.addDays(t,-1);
   var inner='<div class="sheethead">'+
@@ -2517,6 +2527,8 @@ function renderSheet(title){
       '<div class="dquick"><button class="'+(d.date===t?"on":"")+'" onclick="draftDate(\''+t+'\')">Hoy</button><button class="'+(d.date===y?"on":"")+'" onclick="draftDate(\''+y+'\')">Ayer</button></div></div>'+
     body;
   root.innerHTML=sheetShell("closeSheet",inner);
+  if(prevSheet){ var wr=root.querySelector(".sheetwrap"); if(wr) wr.classList.add("rerender");
+    if(prevScroll>0){ var ns=root.querySelector(".sheet"); if(ns) ns.scrollTop=prevScroll; } }
   sizeAmt();
 }
 function fmtAmtIn(n){ if(!n) return ""; var s=String(n),p=s.split(".");
@@ -2620,7 +2632,17 @@ function draftSplitCustom(){
   if(isNaN(n)||n<0||n>100){ toast("Pon un número de 0 a 100"); return; }
   draft.splitP1=n; renderSheet(shTitle());
 }
-function toggleCatDD(){ catOpen=!catOpen; if(!catOpen) catQ=""; renderSheet(draftId?"Editar":"Registro"); if(catOpen){ var i=document.getElementById("catQ"); if(i) i.focus(); } }
+function toggleCatDD(){
+  catOpen=!catOpen; if(!catOpen) catQ="";
+  /* toggle en sitio: sin re-render (el scroll no brinca) y SIN focus (el teclado no se abre solo) */
+  var p=document.querySelector(".catpanel");
+  if(p){ p.classList.toggle("hide",!catOpen);
+    if(catOpen){ var l=document.getElementById("catList"); if(l) l.innerHTML=catListHTML(draft?draft.category:null);
+      var q=document.getElementById("catQ"); if(q) q.value=catQ;
+      setTimeout(function(){ try{ p.scrollIntoView({block:"nearest",behavior:"smooth"}); }catch(e){} },30); }
+    buzz(5); return; }
+  renderSheet(shTitle());
+}
 function refreshCatList(){ var el=document.getElementById("catList"); if(el) el.innerHTML=catListHTML(draft?draft.category:null); }
 function draftType(t){ draft.type=t; if(t==="Ingreso") draft.expenseType=""; else if(draft.category) draft.expenseType=etFor(draft.category,"Egreso"); renderSheet(draftId?"Editar":"Registro"); }
 function draftET(v){ draft.expenseType=v; renderSheet(draftId?"Editar":"Registro"); }
