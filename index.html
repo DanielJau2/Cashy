@@ -210,6 +210,13 @@ input:focus,textarea:focus,select:focus{outline:none;}
 .rsw.on{background:var(--acc);}
 .rsw.on i{transform:translateX(18px);}
 .pill2 button svg{vertical-align:-2px;margin-right:4px;}
+.pendban,.syncwarn{display:flex;align-items:center;gap:7px;width:100%;text-align:left;border-radius:14px;padding:10px 13px;margin:0 0 12px;font-size:12.5px;font-weight:600;}
+.pendban{background:color-mix(in srgb,var(--gold,#e0a500) 14%,transparent);color:var(--gold,#a87b00);border:1px solid color-mix(in srgb,var(--gold,#e0a500) 30%,transparent);}
+.syncwarn{background:color-mix(in srgb,var(--red,#e5484d) 10%,transparent);color:var(--red,#c73a3f);border:1px solid color-mix(in srgb,var(--red,#e5484d) 26%,transparent);}
+.tabinit{font-family:var(--fd);font-weight:800;font-size:17px;line-height:1;color:inherit;display:block!important;}
+.tabexp{position:relative;}
+.tabdot{position:absolute;top:7px;right:9px;width:7px;height:7px;border-radius:50%;background:var(--gold,#e0a500);display:block!important;}
+.codebox{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px 11px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;word-break:break-all;color:var(--dim);margin:6px 0;}
 .pill2.wrapp button{flex:0 1 auto;min-width:0;padding:9px 12px;font-size:12.5px;}
 .pill2.scopep button svg{vertical-align:-2px;margin-right:3px;}
 .ratmini{display:flex;align-items:center;gap:12px;cursor:pointer;}
@@ -241,7 +248,7 @@ input:focus,textarea:focus,select:focus{outline:none;}
 .sheet *{max-width:100%;}
 .grab{width:38px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 10px;}
 .sheet h2{font-family:var(--fd);font-weight:800;font-size:18px;letter-spacing:-.01em;margin:0 0 8px;text-transform:none;}
-.sheet .amt-edit{font-family:var(--fd);font-weight:800;font-size:44px;text-align:center;letter-spacing:-.03em;margin:2px 0 12px;border:none;background:none;width:100%;color:var(--text);}
+.sheet .amt-edit{font-family:var(--fd);font-weight:800;font-size:44px;line-height:1.25;padding:2px 0;text-align:center;letter-spacing:-.03em;margin:2px 0 12px;border:none;background:none;width:100%;color:var(--text);}
 .sheethead{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:10px;margin:0 -18px 12px;padding:6px 16px 10px;
   background:var(--sheetbg);-webkit-backdrop-filter:blur(24px) saturate(1.3);backdrop-filter:blur(24px) saturate(1.3);}
 .sheethead::after{content:"";position:absolute;left:0;right:0;bottom:-12px;height:12px;pointer-events:none;
@@ -1166,13 +1173,21 @@ function personIn(normText, aliases){
   ["p1","p2"].forEach(function(p){ (aliases[p]||[]).forEach(function(a){ if(a && hasKw(normText,a)) found=p; }); });
   return found;
 }
+function personsIn(normText, aliases){
+  var out={p1:false,p2:false};
+  if(!aliases) return out;
+  ["p1","p2"].forEach(function(p){ (aliases[p]||[]).forEach(function(a){ if(a && hasKw(normText,a)) out[p]=true; }); });
+  return out;
+}
 /* Devuelve {from,to} si el texto describe efectivo dado/recibido entre la pareja. */
 function detectCashGift(text, ctx){
   ctx=ctx||{}; if(!ctx.personAliases) return null;
   var me=ctx.me||"p1", other=(me==="p1")?"p2":"p1";
   var n=normAlnum(text);
   if(/(^|\s)(cajero|atm)(\s|$)/.test(n)) return null; /* retiro de cajero, no regalo */
-  var who=personIn(n, ctx.personAliases);
+  var m=personsIn(n, ctx.personAliases);
+  /* apodos compartidos (ej. "ratonchi"): al dictar hablas del OTRO */
+  var who=m[other]?other:(m[me]?me:null);
   var give=GIVE_RE.test(n), recv=RECEIVE_RE.test(n);
   var take=TAKE_RE.test(n) && MONEY_RE.test(n);
   if(recv){ if(!who||who===me) return null; return {from:who, to:me}; }
@@ -1189,7 +1204,7 @@ function detectCashGift(text, ctx){
 /* quita nombres y verbos de regalo para dejar una descripción limpia */
 function stripGiftWords(text, aliases){
   var t=normAlnum(text).replace(GIVE_RE," ").replace(RECEIVE_RE," ").replace(TAKE_RE," ");
-  var stop={a:1,en:1,efectivo:1,dinero:1,cash:1,lana:1,billete:1,billetes:1,feria:1,de:1,del:1,para:1,el:1,la:1,los:1,las:1,un:1,una:1,unos:1,pesos:1,peso:1,varos:1,varo:1,mil:1,k:1,lucas:1,luca:1,le:1,me:1,ya:1,y:1};
+  var stop={a:1,en:1,efectivo:1,dinero:1,cash:1,lana:1,billete:1,billetes:1,feria:1,de:1,del:1,para:1,el:1,la:1,los:1,las:1,un:1,una:1,unos:1,pesos:1,peso:1,varos:1,varo:1,mil:1,k:1,lucas:1,luca:1,le:1,me:1,ya:1,y:1,agarre:1,tome:1};
   var aset={};
   ["p1","p2"].forEach(function(p){ (aliases&&aliases[p]||[]).forEach(function(a){ String(a||"").split(/\s+/).forEach(function(w){ if(w) aset[w]=1; }); }); });
   var toks=t.split(/\s+/).filter(function(w){ return w && !stop[w] && !aset[w] && !/^\d+$/.test(w); });
@@ -1262,7 +1277,7 @@ var api={
   activeEntries:activeEntries,cashDelta:cashDelta,computeBalance:computeBalance,
   cashTotals:cashTotals,categoryTotals:categoryTotals,accountTotals:accountTotals,etTotals:etTotals,inRange:inRange,
   entryTab:entryTab,expandEntry:expandEntry,tsvForTab:tsvForTab,amountForExport:amountForExport,formatMoney:formatMoney,
-  SHARED_CATS:SHARED_CATS,sharedCatFor:sharedCatFor,hasSharedKw:hasSharedKw,detectCashGift:detectCashGift,personIn:personIn,stripGiftWords:stripGiftWords,sharedBalance:sharedBalance,sharedCatTotals:sharedCatTotals,splitLabel:splitLabel,colsShared:colsShared,sharedRow:sharedRow,tsvShared:tsvShared,exportTags:exportTags
+  SHARED_CATS:SHARED_CATS,sharedCatFor:sharedCatFor,hasSharedKw:hasSharedKw,detectCashGift:detectCashGift,personIn:personIn,personsIn:personsIn,stripGiftWords:stripGiftWords,sharedBalance:sharedBalance,sharedCatTotals:sharedCatTotals,splitLabel:splitLabel,colsShared:colsShared,sharedRow:sharedRow,tsvShared:tsvShared,exportTags:exportTags
 };
 if(typeof module!=="undefined"&&module.exports) module.exports=api; else root.CashyEngine=api;
 })(typeof window!=="undefined"?window:globalThis);
@@ -1394,8 +1409,8 @@ function touchSharedMeta(){ DB.sharedMeta.updatedAt=Date.now(); }
 function personAliases(){
   var nm=names(), ex=DB.sharedMeta.aliases||{p1:[],p2:[]};
   function toks(s){ return String(s||"").toLowerCase().split(/\s+/).filter(Boolean); }
-  var p1=["raton","ratoncito"].concat(toks(nm.p1)).concat(ex.p1||[]);
-  var p2=["ratona","ratoncita"].concat(toks(nm.p2)).concat(ex.p2||[]);
+  var p1=["raton","ratoncito","ratonchino","ratonchi","dany","daniel","dani","danny"].concat(toks(nm.p1)).concat(ex.p1||[]);
+  var p2=["ratona","ratoncita","ratonchina","ratonchi","karen"].concat(toks(nm.p2)).concat(ex.p2||[]);
   return {p1:p1.map(E.normAlnum).filter(Boolean), p2:p2.map(E.normAlnum).filter(Boolean)};
 }
 /* entradas "vivas" para MÍ: personales mías + compartidas (de ambos) + espejos míos aceptados.
@@ -1438,6 +1453,77 @@ function sentPendingByMe(){
   return out.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
 }
 function pendingCount(){ return pendingForMe().length; }
+/* banner si hay pendientes con más de 3 días */
+function stalePending(){
+  var lim=Date.now()-3*24*60*60*1000;
+  return pendingForMe().filter(function(e){ return (e.createdAt||0)<lim; }).length;
+}
+function pendingBannerHTML(){
+  var n=pendingForMe().length; if(!n) return "";
+  var old=stalePending();
+  if(!old) return "";
+  return '<button class="pendban" onclick="openNotifs()">'+ico("bell",14)+' Tienes '+n+' pendiente'+(n>1?"s":"")+' por revisar — el más viejo lleva 3+ días</button>';
+}
+/* aviso: sin sesión no se sincroniza */
+function syncWarnHTML(){
+  if(session) return "";
+  return '<button class="syncwarn" onclick="go(\'set\')">'+ico("cloudOff",14)+' Sin sesión — lo que registres NO se sincroniza. Entra en Ajustes</button>';
+}
+function profInitial(){ return session? (names()[prof()]||"?").trim().charAt(0).toUpperCase() : null; }
+/* verificación de cuadre: consistencia interna de Ratones */
+function checkCuadre(){
+  var issues=[], sh=[], mirrors={}, tot=0;
+  for(var id in DB.entries){ var e=DB.entries[id]; if(!e||e.deleted) continue;
+    if(e.mirror){ mirrors[e.giftLink||""]=e; continue; }
+    if(e.scope==="shared"&&e.kind!=="transfer") sh.push(e);
+  }
+  var sb=E.sharedBalance(DB.entries);
+  sh.forEach(function(e){ tot+=(e.type==="Ingreso"?-1:1)*(e.amount||0); });
+  var paidSum=Math.round((sb.p1Paid+sb.p2Paid)*100)/100;
+  var shareSum=Math.round((sb.p1Share+sb.p2Share)*100)/100;
+  if(Math.abs(paidSum-shareSum)>0.01) issues.push("Pagado ("+money(paidSum)+") ≠ repartido ("+money(shareSum)+")");
+  if(Math.abs(sb.bal-((sb.p1Paid-sb.p1Share)))>0.01) issues.push("El balance no coincide con pagado−tocaba");
+  sh.forEach(function(e){
+    if(e.review!=="pending"&&e.review!=="reviewed") issues.push("Revisión inválida en "+(e.category||"?")+" "+money(e.amount));
+    var rec=giftReceiver(e);
+    if(rec){ var m=mirrors[e.id];
+      if(!m) issues.push("Efectivo "+money(e.amount)+" sin espejo del receptor");
+      else{ if(Math.abs((m.amount||0)-(e.amount||0))>0.01) issues.push("Espejo con monto distinto ("+money(m.amount)+" vs "+money(e.amount)+")");
+        if(m.personalFor!==rec) issues.push("Espejo apunta a la persona equivocada"); } }
+  });
+  for(var gl in mirrors){ var m2=mirrors[gl];
+    if(!gl||!DB.entries[gl]||DB.entries[gl].deleted) issues.push("Espejo huérfano de "+money(m2.amount)); }
+  return issues;
+}
+function openCuadre(){
+  var issues=checkCuadre();
+  var body= issues.length?
+    '<p style="color:var(--red);font-weight:700">Se encontraron '+issues.length+' detalle(s):</p>'+issues.map(function(i){return '<div class="ncard"><div class="nline">'+esc(i)+'</div></div>';}).join("")+'<p style="font-size:12px;color:var(--faint)">Suele arreglarse editando el registro señalado. Si algo no cuadra, dime y lo revisamos.</p>'
+    :'<p style="text-align:center;margin:20px 4px">Todo cuadra ✔<br><span style="font-size:12.5px;color:var(--dim)">Pagado = repartido, espejos ligados y balance consistente.</span></p>';
+  document.getElementById("sheetroot").innerHTML=sheetShell("dismissSheet",'<h2>Verificación de cuadre</h2>'+body+'<div class="sheetbtns"><button class="btn ghost" onclick="dismissSheet()">Cerrar</button></div>');
+}
+/* resumen semanal: lunes, una vez por semana */
+function isoWeekKey(d){ d=d||new Date(); var x=new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate()+3-((x.getDay()+6)%7)); var w1=new Date(x.getFullYear(),0,4); return x.getFullYear()+"-w"+(1+Math.round(((x-w1)/864e5-3+((w1.getDay()+6)%7))/7)); }
+function maybeWeekly(){
+  var now=new Date(); if(now.getDay()!==1) return; /* lunes */
+  var wk=isoWeekKey(now); if(DB.settings.lastWeekly===wk) return;
+  DB.settings.lastWeekly=wk; save();
+  var end=E.addDays(E.todayISO(),-((now.getDay()+6)%7)); /* lunes de esta semana */
+  var from=E.addDays(end,-7), to=E.addDays(end,-1);
+  var per=0,rat=0,cats={};
+  E.activeEntries(liveEntries()).forEach(function(e){
+    if(e.kind==="transfer"||!E.inRange(e.date,from,to)) return;
+    if(e.type!=="Egreso") return;
+    if(e.scope==="shared"){ if(e.category!=="Corte"&&e.category!=="Efectivo") rat+=e.amount||0; return; }
+    per+=e.amount||0; if(e.category) cats[e.category]=(cats[e.category]||0)+(e.amount||0);
+  });
+  var top=Object.keys(cats).sort(function(a,b){return cats[b]-cats[a];})[0];
+  var body='<h2>Tu semana pasada</h2>'+
+    '<div class="ncard"><div class="nline">Personal: '+money(per)+'</div><div class="nsub">'+(top?('Top: '+esc(top)+' · '+money(cats[top])):"Sin gastos personales")+'</div></div>'+
+    '<div class="ncard"><div class="nline">'+ico("mouse",14)+' Ratones: '+money(rat)+'</div><div class="nsub">Gasto conjunto (sin cortes/efectivo)</div></div>'+
+    '<div class="sheetbtns"><button class="btn ghost" onclick="dismissSheet()">Cerrar</button></div>';
+  document.getElementById("sheetroot").innerHTML=sheetShell("dismissSheet",body);
+}
 DB=migrate(DB);
 function applyConfig(){ try{ E.configureAccounts(DB.settings.accounts); E.configureCategories(DB.settings.cats); }catch(e){} }
 applyConfig();
@@ -1503,6 +1589,7 @@ function applyAccent(){
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 function money(n){ if(DB.settings.hideAmts) return "$ ••••"; return E.formatMoney(n); }
+function iconColorFor(e){ return (DB.settings.accentMode==="fixed")? (DB.settings.accentColor||"#10b981") : colorFor(e.account); }
 function toast(m,g,action){
   var t=document.getElementById("toast");
   if(action){ t.innerHTML=esc(m)+'<span class="ta">'+esc(action.label)+'</span>'; t._fn=action.fn;
@@ -1584,7 +1671,8 @@ var IC={
   mouse:'<circle cx="6.9" cy="6.3" r="2.8"/><circle cx="17.1" cy="6.3" r="2.8"/><ellipse cx="12" cy="13.2" rx="7" ry="6"/><circle cx="9.4" cy="12.2" r=".95" fill="currentColor" stroke="none"/><circle cx="14.6" cy="12.2" r=".95" fill="currentColor" stroke="none"/><path d="M11.1 15.7h1.8l-.9 1.2z" fill="currentColor" stroke="none"/><path d="M2.1 13.4h2.7M2.4 16l2.6-.7M21.9 13.4h-2.7M21.6 16l-2.6-.7"/>',
   eye:'<path d="M2.2 12s3.5-6.2 9.8-6.2S21.8 12 21.8 12s-3.5 6.2-9.8 6.2S2.2 12 2.2 12z"/><circle cx="12" cy="12" r="2.9"/>',
   eyeOff:'<path d="M4 4l16 16"/><path d="M9.9 5.2A10.4 10.4 0 0 1 12 5c6.3 0 9.8 7 9.8 7a17.5 17.5 0 0 1-3.2 4.1M6.6 6.6C3.8 8.5 2.2 12 2.2 12s3.5 7 9.8 7c1.4 0 2.7-.3 3.8-.9"/><path d="M9.9 9.9a2.9 2.9 0 0 0 4.1 4.1"/>',
-  bell:'<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.5 20a1.8 1.8 0 0 0 3 0"/>'
+  bell:'<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.5 20a1.8 1.8 0 0 0 3 0"/>',
+  cloudOff:'<path d="M4 4l16 16"/><path d="M7.5 18.5h9.3a4 4 0 0 0 1.9-.5M20.7 15a4 4 0 0 0-3.2-5.5A6 6 0 0 0 8 7.2M4.6 8.6A6 6 0 0 0 6 18.4"/>'
 };
 function ico(n,s){s=s||22;return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(IC[n]||"")+'</svg>';}
 
@@ -1759,7 +1847,7 @@ function openSheetFromPad(){
 /* ============ SALDO ============ */
 function viewSaldo(){
   var b=balance(),mIso=E.todayISO().slice(0,7),t=cashTotalsMine(mIso+"-01",mIso+"-31");
-  return header()+
+  return header()+pendingBannerHTML()+syncWarnHTML()+
     '<div class="card bigbal"><div class="lbl">Efectivo en mano</div><div class="v'+(b<0?" neg":"")+'">'+esc(money(b))+'</div></div>'+
     '<div class="twocol"><div class="card"><div class="k">Entró (mes)</div><div class="val in">'+esc(money(t.inn))+'</div></div>'+
     '<div class="card"><div class="k">Salió (mes)</div><div class="val out">'+esc(money(t.out))+'</div></div></div>'+
@@ -1845,7 +1933,7 @@ function entryRowBase(e,click,swipe,idx){
     var sub=[shInfo,e.account!=="Cash"?e.account:"",e.place,e.details,tg].filter(Boolean).join(" · ")||(e.expenseType||e.type);
     var chip=isSh?((e.review==="reviewed")?'<span class="rvchip done">'+ico("check",10)+'revisado</span>':'<span class="rvchip pend">por revisar</span>'):"";
     var tag=(isSh||isMir)?('<span class="rmark">'+ico("mouse",12)+'</span>'):'';
-    inner='<div class="ic" style="color:'+esc(colorFor(e.account))+'">'+esc(catInitial(e.category))+'</div>'+
+    inner='<div class="ic" style="color:'+esc(iconColorFor(e))+'">'+esc(catInitial(e.category))+'</div>'+
       '<div class="mid"><div class="t">'+tag+esc(e.category||"Sin categoría")+chip+'</div><div class="s">'+esc(sub)+'</div></div>'+
       (e.exported?'<div class="dot"></div>':'')+'<div class="amt '+(e.type==="Ingreso"?"in":"out")+'">'+sign+esc(money(e.amount).replace("$",""))+'</div>';
   }
@@ -1904,6 +1992,7 @@ function resLabel(){
 }
 function viewResumen(){
   var r=resRange(), from=r[0], to=r[1];
+  var _pb=pendingBannerHTML();
   var ents=entriesFor(V.resScope);
   var isEt=V.resDim==="et";
   var kind=V.resKind;
@@ -1935,7 +2024,7 @@ function viewResumen(){
   var vseg='<div class="seg mini">'+views.map(function(x){return '<button class="'+(V.resView===x[0]?"on out":"")+'" onclick="V.resView=\''+x[0]+'\';render()">'+x[1]+'</button>';}).join("")+'</div>';
   var sseg=hasShared?('<div class="seg mini" style="margin-top:6px">'+[["personal","Personal"],["shared","Ratones"],["all","Todo"]].map(function(x){return '<button class="'+(V.resScope===x[0]?"on out":"")+'" onclick="V.resScope=\''+x[0]+'\';render()">'+x[1]+'</button>';}).join("")+'</div>'):"";
 
-  if(V.resView==="rat") return header("Resumen")+vseg+viewRatones();
+  if(V.resView==="rat") return header("Resumen")+_pb+vseg+viewRatones();
   if(V.resView==="cal") return header("Resumen")+vseg+sseg+weekCompareCard()+calView();
   var chart;
   if(V.resView==="dona") chart=donutView(rows,total,isIn);
@@ -2071,6 +2160,7 @@ function viewRatones(){
     '<div class="v'+(abs&&meOwes?" neg":"")+'">'+(abs?esc(money(abs)):"$0")+'</div>'+
     '<div class="who">'+esc(owes)+(abs?"":" 🎉".replace(" 🎉",""))+'</div>'+
     (abs?('<button class="btn ghost mini" style="margin-top:12px" onclick="openCorte()">Registrar corte de '+esc(money(abs))+'</button>'):'')+
+    '<button class="btn ghost mini" style="margin-top:8px" onclick="openCuadre()">Verificar cuadre</button>'+
     '</div>';
   function pcard(p){
     var paid=(p==="p1")?sb.p1Paid:sb.p2Paid, share=(p==="p1")?sb.p1Share:sb.p2Share;
@@ -2340,6 +2430,9 @@ function viewSettings(){
     accentBlock()+
     lockBlock()+
     '<div class="sblk"><h3>Efectivo</h3><div class="field"><div class="fl">Saldo inicial</div><input id="stBal" inputmode="decimal" value="'+esc(DB.settings.startingBalance)+'"></div><button class="btn ghost mini" onclick="saveStart()">Guardar saldo inicial</button></div>'+
+    '<div class="sblk"><h3>Atajos y Siri</h3><p>Registra sin abrir la app: crea un <b>Atajo</b> de iOS con la acción <b>Dictar texto</b> seguida de <b>Abrir URL</b> apuntando a:</p>'+
+      '<div class="codebox" style="user-select:all">'+esc((location.origin+location.pathname).replace(/index\.html$/,""))+'?q=[Texto dictado]</div>'+
+      '<p style="font-size:12px;color:var(--faint)">Sustituye [Texto dictado] por la variable del atajo. Dile a Siri el nombre del atajo (ej. "Cashy") y dicta: «200 tacos», «le di 500 a ratona»… Se abre directo en la tarjeta de confirmación.</p></div>'+
     '<div class="sblk"><h3>Recordatorio</h3><p>iOS no permite avisos programados confiables en apps web. Lo seguro: un <b>Atajo</b> que a esta hora abra Cashy.</p>'+
       '<div class="field"><div class="fl">Hora</div><input id="remTime" type="time" value="'+esc(DB.settings.reminderTime)+'"></div>'+
       '<div style="display:flex;gap:10px"><button class="btn ghost mini" style="flex:1" onclick="saveRem()">Guardar hora</button><button class="btn ghost mini" style="flex:1" onclick="testNotif()">Probar aviso</button></div>'+
@@ -2532,8 +2625,8 @@ function renderSheet(title){
     var msiUI=E.isTDC(d.account)?'<div class="field"><div class="fl">Meses (MSI)</div><input id="dfMsi" inputmode="numeric" value="'+esc(d.msi||1)+'" oninput="draft.msi=Math.max(1,parseInt(this.value.replace(/[^0-9]/g,\'\'))||1)"></div>':'';
     var nm=names();
     var scopeUI='<div class="field" style="margin-top:12px"><div class="fl">¿De quién es?</div><div class="pill2 scopep"><button class="'+(!isSh?"on":"")+'" onclick="setDraftScope(\'personal\')">Personal</button><button class="'+(isSh?"on":"")+'" onclick="setDraftScope(\'shared\')">'+ico("mouse",15)+' Ratones</button></div></div>';
-    var ratUI="";
-    if(isSh){
+    var ratUI="", isGift=isSh && d.category==="Efectivo";
+    if(isSh && !isGift){
       var pb=(d.paidBy==="p2")?"p2":"p1";
       var payUI='<div class="field"><div class="fl">Pagó</div><div class="pill2"><button class="'+(pb==="p1"?"on":"")+'" onclick="draftPaidBy(\'p1\')">'+esc(nm.p1)+'</button><button class="'+(pb==="p2"?"on":"")+'" onclick="draftPaidBy(\'p2\')">'+esc(nm.p2)+'</button></div></div>';
       var sp=(typeof d.splitP1==="number")?d.splitP1:defaultSplit();
@@ -2544,12 +2637,19 @@ function renderSheet(title){
       btns+='<button class="'+(seen[sp]?"":"on")+'" onclick="draftSplitCustom()">'+(seen[sp]?"Otro…":esc(E.splitLabel(sp)))+'</button>';
       var splitUI='<div class="field"><div class="fl">División ('+esc(nm.p1)+'/'+esc(nm.p2)+')</div><div class="pill2 wrapp">'+btns+'</div></div>';
       ratUI=payUI+splitUI;
-      var grec=giftReceiver(d);
-      if(grec){ var gn=names()[grec];
-        var gsub=(grec===prof())?'Entra a tu efectivo al guardar':'Le llega como ingreso · lo aprueba en su Cashy';
-        ratUI='<div class="giftnote">'+ico("mouse",15)+'<div class="gtxt"><b>Efectivo para '+esc(gn)+'</b><span>'+gsub+'</span></div></div>'+ratUI; }
     }
-    body='<div class="pill2"><button class="'+(d.type==="Egreso"?"on":"")+'" onclick="draftType(\'Egreso\')">Sale (Egreso)</button><button class="'+(d.type==="Ingreso"?"on":"")+'" onclick="draftType(\'Ingreso\')">Entra (Ingreso)</button></div>'+
+    if(isGift){
+      /* efectivo entre ustedes: solo la dirección; el resto (egreso, pagó, división 100-0) se arma solo */
+      var giver=(d.paidBy==="p2")?"p2":"p1", recv=(giver==="p1")?"p2":"p1";
+      var meIsRecv=(recv===prof());
+      ratUI='<div class="field"><div class="fl">¿Quién dio el efectivo?</div><div class="pill2">'+
+        '<button class="'+(giver==="p1"?"on":"")+'" onclick="draftGiftDir(\'p1\')">'+esc(nm.p1)+' → '+esc(nm.p2)+'</button>'+
+        '<button class="'+(giver==="p2"?"on":"")+'" onclick="draftGiftDir(\'p2\')">'+esc(nm.p2)+' → '+esc(nm.p1)+'</button></div></div>'+
+        '<div class="giftnote">'+ico("mouse",15)+'<div class="gtxt"><b>'+esc(nm[giver])+' da efectivo a '+esc(nm[recv])+'</b><span>'+
+        (meIsRecv?'Entra a tu efectivo al guardar · a '+esc(nm[giver])+' le baja el suyo':'Sale de tu efectivo · a '+esc(nm[recv])+' le llega como ingreso'+(recv!==prof()?' para aprobar':''))+
+        '</span></div></div>';
+    }
+    body=(isGift?"":'<div class="pill2"><button class="'+(d.type==="Egreso"?"on":"")+'" onclick="draftType(\'Egreso\')">Sale (Egreso)</button><button class="'+(d.type==="Ingreso"?"on":"")+'" onclick="draftType(\'Ingreso\')">Entra (Ingreso)</button></div>')+
       scopeUI+
       '<div class="field"><div class="fl">Cuenta / método de pago</div>'+acctBtnInline("da",d.account)+'</div>'+
       ratUI+
@@ -2590,7 +2690,7 @@ function amtInput(el){
   el.value=disp; sizeAmt();
   try{ el.setSelectionRange(disp.length,disp.length); }catch(e){}
 }
-function sizeAmt(){ var el=document.getElementById("dfAmt"); if(el) el.style.width=Math.max(1,(el.value||"0").length+1)+"ch"; }
+function sizeAmt(){ var el=document.getElementById("dfAmt"); if(el){ var len=String(el.value||el.placeholder||"0").length; el.style.width=(Math.max(2,len)+1.6)+"ch"; } }
 function dateChipLabel(iso){ var t=E.todayISO(); if(iso===t) return "Hoy"; if(iso===E.addDays(t,-1)) return "Ayer";
   try{ var d2=E.fromISO(iso); var o={day:"numeric",month:"short"}; if(String(iso).slice(0,4)!==t.slice(0,4)) o.year="numeric"; return d2.toLocaleDateString("es-MX",o); }catch(e){ return iso; } }
 function syncDateUI(){ var lbl=document.getElementById("dateLbl"); if(lbl) lbl.textContent=dateChipLabel(draft.date);
@@ -2672,6 +2772,11 @@ function setDraftScope(v){
   buzz(6); renderSheet(shTitle());
 }
 function draftPaidBy(p){ draft.paidBy=p; buzz(5); renderSheet(shTitle()); }
+function draftGiftDir(giver){
+  draft.paidBy=giver; draft.type="Egreso"; draft.account="Cash";
+  draft.splitP1=(giver==="p1")?0:100; /* 100% del que recibe */
+  buzz(6); renderSheet(shTitle());
+}
 function draftSplit(v){ draft.splitP1=v; buzz(5); renderSheet(shTitle()); }
 function draftSplitCustom(){
   var nm=names();
@@ -2697,9 +2802,12 @@ function draftET(v){ draft.expenseType=v; renderSheet(draftId?"Editar":"Registro
 function draftCat(c){ c=unq(c); draft.category=c; catOpen=false; catQ=""; buzz(6);
   if(draft.scope==="shared"){
     draft.expenseType="";
-    if(c==="Efectivo"||c==="Corte"){ /* 100% del que recibe: quien paga entrega el dinero */
+    if(c==="Efectivo"){ /* modo regalo: dirección clara, el modelo se arma solo */
+      draft.type="Egreso"; draft.account="Cash";
       draft.splitP1=((draft.paidBy||prof())==="p1")?0:100;
-      toast(c+": 100% para el otro (ajústalo si quieres)");
+    } else if(c==="Corte"){
+      draft.splitP1=((draft.paidBy||prof())==="p1")?0:100;
+      toast("Corte: 100% para el otro (ajústalo si quieres)");
     }
     renderSheet(shTitle()); return;
   }
@@ -2720,7 +2828,9 @@ function saveSheet(){
   if(mkRec) addRecurring(obj,d.repeat);
   closeSheet(); V.amt=""; V.cat=null; render(); toast(mkRec?"Guardado + recurrente ✔":"Guardado ✔",true);
 }
-function duplicateEntry(){ if(!draftId){ toast("Guarda primero"); return; } var e=DB.entries[draftId]; if(!e) return; var nid=uid(); var copy=Object.assign({},e); copy.id=nid; copy.createdAt=Date.now(); copy.updatedAt=Date.now(); copy.exported=false; copy.deleted=false; DB.entries[nid]=copy; save(); closeSheet(); render(); toast("Duplicado ✔",true); }
+function duplicateEntry(){ if(!draftId){ toast("Guarda primero"); return; }
+  draft=Object.assign({},draft); draftId=null; draft.date=E.todayISO();
+  renderSheet("Registro"); toast("Copia con fecha de HOY — cámbiala si era otra",true); }
 function deleteEntry(){ if(!draftId) return; if(!confirm("¿Borrar este registro?")) return; var e=DB.entries[draftId]; if(e){ e.deleted=true; e.updatedAt=Date.now(); } save(); closeSheet(); render(); toast("Borrado"); }
 
 /* ---- multi ---- */
@@ -2831,15 +2941,31 @@ function openNotifs(){
   var inner='<h2>Notificaciones</h2>'+body+'<div class="sheetbtns"><button class="btn ghost" onclick="dismissSheet()">Cerrar</button></div>';
   document.getElementById("sheetroot").innerHTML=sheetShell("dismissSheet",inner);
 }
-function doReview(id){ var e=DB.entries[id]; if(!e||e.deleted) return; e.review="reviewed"; e.updatedAt=Date.now();
-  var m=findMirrorFor(id); if(m && m.personalFor===prof()){ m.accept="accepted"; if(!DB.settings.cats[m.category]) m.category=incomeCatIn(DB.settings.cats); m.updatedAt=Date.now(); }
-  save(); }
-function doReject(id){ var e=DB.entries[id]; if(!e) return; e.deleted=true; e.updatedAt=Date.now();
-  var m=findMirrorFor(id); if(m){ m.deleted=true; m.updatedAt=Date.now(); } save(); }
-function reviewFromNotif(id){ doReview(id); render(); openNotifs(); toast("Revisado ✔",true); }
-function rejectFromNotif(id){ doReject(id); render(); openNotifs(); toast("Se quitó para ambos"); }
-function reviewEntry(id){ doReview(id); render(); toast("Revisado ✔",true); }
-function rejectEntry(id){ if(!confirm("¿Rechazar? Se quitará para ambos.")) return; doReject(id); render(); toast("Se quitó para ambos"); }
+function doReview(id){ var e=DB.entries[id]; if(!e||e.deleted) return null; var m=findMirrorFor(id);
+  var snap={e:{review:e.review}, m:m?{accept:m.accept,category:m.category}:null, mid:m?m.id:null};
+  e.review="reviewed"; e.updatedAt=Date.now();
+  if(m && m.personalFor===prof()){ m.accept="accepted"; if(!DB.settings.cats[m.category]) m.category=incomeCatIn(DB.settings.cats); m.updatedAt=Date.now(); }
+  save(); return snap; }
+function undoReview(id,snap){ var e=DB.entries[id]; if(!e||!snap) return;
+  e.review=snap.e.review; e.updatedAt=Date.now();
+  if(snap.mid&&DB.entries[snap.mid]){ var m=DB.entries[snap.mid]; m.accept=snap.m.accept; m.category=snap.m.category; m.updatedAt=Date.now(); }
+  save(); render(); }
+function doReject(id){ var e=DB.entries[id]; if(!e) return null; var m=findMirrorFor(id);
+  e.deleted=true; e.updatedAt=Date.now();
+  if(m){ m.deleted=true; m.updatedAt=Date.now(); }
+  save(); return {mid:m?m.id:null}; }
+function undoReject(id,snap){ var e=DB.entries[id]; if(!e) return;
+  e.deleted=false; e.updatedAt=Date.now();
+  if(snap&&snap.mid&&DB.entries[snap.mid]){ var m=DB.entries[snap.mid]; m.deleted=false; m.updatedAt=Date.now(); }
+  save(); render(); }
+function reviewFromNotif(id){ var s=doReview(id); render(); openNotifs();
+  toast("Revisado ✔",true,{label:"Deshacer",fn:function(){ undoReview(id,s); openNotifs(); }}); }
+function rejectFromNotif(id){ var s=doReject(id); render(); openNotifs();
+  toast("Se quitó para ambos",false,{label:"Deshacer",fn:function(){ undoReject(id,s); openNotifs(); }}); }
+function reviewEntry(id){ var s=doReview(id); render();
+  toast("Revisado ✔",true,{label:"Deshacer",fn:function(){ undoReview(id,s); }}); }
+function rejectEntry(id){ if(!confirm("¿Rechazar? Se quitará para ambos.")) return; var s=doReject(id); render();
+  toast("Se quitó para ambos",false,{label:"Deshacer",fn:function(){ undoReject(id,s); }}); }
 function backup(){ var blob=new Blob([JSON.stringify(DB,null,2)],{type:"application/json"}); var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="cashy-respaldo-"+E.todayISO()+".json"; a.click(); setTimeout(function(){URL.revokeObjectURL(a.href);},1000); }
 function importBackup(ev){ var f=ev.target.files&&ev.target.files[0]; if(!f) return; var r=new FileReader(); r.onload=function(){ try{ var d=JSON.parse(r.result); if(!d||!d.entries){ alert("No es un respaldo válido de Cashy."); return; } DB=migrate(mergeDB(DB,d)); applyConfig(); save(); render(); toast("Importado",true); }catch(e){ alert("No se pudo leer el archivo."); } }; r.readAsText(f); }
 
@@ -3182,7 +3308,11 @@ function renderTabs(){
     for(var i=0;i<bs.length;i++){ var on=(V.tab===tabs[i][0]); bs[i].classList.toggle("on",on); }
     return;
   }
-  el.innerHTML='<div class="tabind" id="tabind"></div>'+tabs.map(function(t){ var on=(V.tab===t[0]); return '<button class="'+(on?"on":"")+'" onclick="go(\''+t[0]+'\')">'+ico(t[2],22)+'<span>'+t[1]+'</span></button>'; }).join("");
+  el.innerHTML='<div class="tabind" id="tabind"></div>'+tabs.map(function(t){ var on=(V.tab===t[0]);
+    var inner=ico(t[2],22);
+    if(t[0]==="exp"){ var ini=profInitial();
+      inner= ini? '<span class="tabinit">'+esc(ini)+'</span>' : ico(t[2],22)+'<span class="tabdot"></span>'; }
+    return '<button class="'+(on?"on":"")+(t[0]==="exp"?" tabexp":"")+'" onclick="go(\''+t[0]+'\')">'+inner+'<span>'+t[1]+'</span></button>'; }).join("");
   moveTabInd();
 }
 function moveTabInd(){
@@ -3229,6 +3359,18 @@ function moveTabInd(){
 render();
 if(needsProfilePick()) showProfilePick();
 initSync();
+if(!needsProfilePick()) setTimeout(maybeWeekly, 400);
+/* Atajos de iOS / Siri: abrir con ?q=texto registra directo (ej. ?q=200 tacos) */
+(function(){
+  try{
+    var q=new URLSearchParams(location.search).get("q");
+    if(!q||!q.trim()||needsProfilePick()) return;
+    history.replaceState(null,"",location.pathname); /* no re-disparar al recargar */
+    go("reg"); V.showTA=true; render();
+    var el=document.getElementById("nlText");
+    if(el){ el.value=q.trim(); autoGrow(el); interpret(); }
+  }catch(e){}
+})();
 initLock();
 processRecurring();
 document.addEventListener("visibilitychange",function(){ if(!document.hidden) processRecurring(); });
