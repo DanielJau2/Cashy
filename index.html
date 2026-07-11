@@ -46,6 +46,14 @@ try{var __d=JSON.parse(localStorage.getItem("cashy_db_v1"));if(__d&&__d.settings
 html{overflow-x:clip;}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--fb);
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overscroll-behavior-y:contain;overflow-x:clip;}
+.vrow{display:flex;gap:8px;align-items:stretch;}
+.vrow .seg{flex:1;}
+.vrow .fbtn{flex:0 0 auto;width:44px;border-radius:14px;background:var(--panel);border:1px solid var(--line);color:var(--dim);}
+.vrow .fbtn.on{color:var(--acc);border-color:var(--acc);background:color-mix(in srgb,var(--acc) 10%,transparent);}
+.seg.icons button{padding:9px 4px;}
+.fsummary{display:block;width:100%;margin-top:6px;background:none;border:1px dashed var(--line);border-radius:12px;padding:8px 12px;font-size:12px;color:var(--faint);text-align:center;}
+.fsummary:active{transform:scale(.98);}
+.dash-side{display:none;}
 /* ===== escritorio ===== */
 @media (min-width:900px){
   #app{max-width:560px;}
@@ -53,6 +61,14 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
   .sheet{max-width:560px;border-radius:24px;margin-bottom:4vh;}
   .sheetwrap{align-items:center;}
   body{background:color-mix(in srgb,var(--bg) 92%, var(--acc) 3%);}
+}
+@media (min-width:1100px){
+  body.res #app{max-width:980px;}
+  .resgrid{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;}
+  .dash-side{display:block;position:sticky;top:14px;}
+  .dash-side .dcard{margin-top:14px;padding:14px;}
+  .dash-side .dcard:first-child{margin-top:0;}
+  .dash-side .k{font-size:10.5px;color:var(--faint);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px;}
 }
 @media (hover:hover){
   .iconbtn:hover,.key:hover,.pill2 button:hover,.qcats .qc:hover,.seg button:hover{filter:brightness(1.06);background:color-mix(in srgb,var(--acc) 7%,var(--panel2,transparent));}
@@ -235,6 +251,8 @@ input:focus,textarea:focus,select:focus{outline:none;}
 .tabinit{font-family:var(--fd);font-weight:800;font-size:17px;line-height:1;color:inherit;display:block!important;}
 .tabexp{position:relative;}
 .tabdot{position:absolute;top:7px;right:9px;width:7px;height:7px;border-radius:50%;background:var(--gold,#e0a500);display:block!important;}
+html.noanim #app *,html.noanim #app{animation:none!important;transition:none!important;}
+.audit{margin-top:16px;padding-top:10px;border-top:1px dashed var(--line);font-size:10.5px;color:var(--faint);letter-spacing:.02em;text-align:center;}
 .mdesc{font-size:12.5px;color:var(--dim);margin-top:6px;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
 .bud{margin-top:5px;}
 .bud .btrack{height:5px;border-radius:3px;background:var(--panel2);overflow:hidden;}
@@ -289,10 +307,12 @@ input:focus,textarea:focus,select:focus{outline:none;}
 .grab{width:38px;height:4px;border-radius:2px;background:var(--line);margin:12px auto 10px;}
 .sheet h2{font-family:var(--fd);font-weight:800;font-size:18px;letter-spacing:-.01em;margin:0 0 8px;text-transform:none;}
 .sheet .amt-edit{font-family:var(--fd);font-weight:800;font-size:44px;line-height:1.25;padding:2px 0;text-align:center;letter-spacing:-.03em;margin:2px 0 12px;border:none;background:none;width:100%;color:var(--text);}
-.sheethead{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:10px;margin:0 -18px 12px;padding:8px 16px 10px;
-  border-radius:28px 28px 0 0;background:transparent;transition:background .18s ease,box-shadow .18s ease;}
-.sheethead.stuck{background:var(--sheetbg);-webkit-backdrop-filter:blur(24px) saturate(1.3);backdrop-filter:blur(24px) saturate(1.3);
-  box-shadow:0 6px 14px rgba(0,0,0,.07);}
+.sheethead{position:sticky;top:8px;z-index:3;display:flex;align-items:center;gap:10px;margin:0 -6px 12px;padding:0;
+  background:none;pointer-events:none;}
+.sheethead>*{pointer-events:auto;}
+.sheethead .shtitle{transition:opacity .15s ease;}
+.sheethead.stuck .shtitle{opacity:0;} /* el título se desvanece; los botones flotan solos */
+.sheethead .shbtn{box-shadow:0 4px 16px rgba(0,0,0,.14);}
 .sheethead .shtitle{flex:1;font-family:var(--fd);font-weight:800;font-size:16px;text-align:center;text-transform:none;letter-spacing:-.01em;}
 .shbtn{width:40px;height:40px;border-radius:14px;display:grid;place-items:center;flex:0 0 auto;background:var(--panel);box-shadow:var(--shadow);color:var(--dim);border:none;}
 .shbtn:active{background:var(--panel2);}
@@ -869,6 +889,78 @@ function parseDate(text, baseISO){
 function formatDateMD(isoStr){ var d=fromISO(isoStr); return (d.getMonth()+1)+"/"+d.getDate()+"/"+String(d.getFullYear()).slice(-2); }
 
 /* ---------------------- montos ---------------------- */
+/* ---- números en palabras (español): "seis", "ciento veinte", "dos mil trescientos cuarenta y cinco" ---- */
+var NW_UNIT={cero:0,un:1,uno:1,una:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,
+  diez:10,once:11,doce:12,trece:13,catorce:14,quince:15,dieciseis:16,diecisiete:17,dieciocho:18,diecinueve:19,
+  veinte:20,veintiun:21,veintiuno:21,veintiuna:21,veintidos:22,veintitres:23,veinticuatro:24,veinticinco:25,
+  veintiseis:26,veintisiete:27,veintiocho:28,veintinueve:29};
+var NW_TENS={treinta:30,cuarenta:40,cincuenta:50,sesenta:60,setenta:70,ochenta:80,noventa:90};
+var NW_HUND={cien:100,ciento:100,doscientos:200,doscientas:200,trescientos:300,trescientas:300,
+  cuatrocientos:400,cuatrocientas:400,quinientos:500,quinientas:500,seiscientos:600,seiscientas:600,
+  setecientos:700,setecientas:700,ochocientos:800,ochocientas:800,novecientos:900,novecientas:900};
+var MONEY_ADJ=/^(pesos?|pesitos?|varos?|mxn|baros?|lucas?|dolares?)$/;
+var SPEND_ADJ=/^(gaste|pague|compre|puse|costo|cobraron|cobre|fueron|son|di|deje|cargue|pago)$/;
+function isNumWord(w){ return NW_UNIT.hasOwnProperty(w)||NW_TENS.hasOwnProperty(w)||NW_HUND.hasOwnProperty(w)||w==="mil"||w==="y"; }
+/* parsea una secuencia desde i; devuelve {value,len} o null */
+function parseNumWordsAt(toks,i){
+  var val=0,grp=0,len=0,usedMil=false,any=false;
+  function flushHund(w){ if(grp>0&&NW_HUND[w]) return false; grp+=NW_HUND[w]; return true; }
+  while(i+len<toks.length){
+    var w=toks[i+len];
+    if(NW_HUND.hasOwnProperty(w)){
+      if(grp>=100){ break; }
+      grp+=NW_HUND[w]; any=true; len++;
+      if(w==="cien"){ /* "cien" no admite unidades después (sería "ciento") */ 
+        if(i+len<toks.length && (NW_UNIT.hasOwnProperty(toks[i+len])||NW_TENS.hasOwnProperty(toks[i+len]))) break;
+      }
+      continue;
+    }
+    if(NW_TENS.hasOwnProperty(w)){
+      if((grp%100)!==0){ break; }
+      grp+=NW_TENS[w]; any=true; len++;
+      if(i+len+1<toks.length && toks[i+len]==="y" && NW_UNIT.hasOwnProperty(toks[i+len+1]) && NW_UNIT[toks[i+len+1]]>=1 && NW_UNIT[toks[i+len+1]]<=9){
+        grp+=NW_UNIT[toks[i+len+1]]; len+=2;
+      }
+      continue;
+    }
+    if(NW_UNIT.hasOwnProperty(w)){
+      if((grp%10)!==0 || (grp%100)>=10&&(grp%100)<30&&(grp%100)!==20){ break; }
+      if((grp%100)!==0 && NW_UNIT[w]>=10){ break; }
+      grp+=NW_UNIT[w]; any=true; len++;
+      continue;
+    }
+    if(w==="mil"){
+      if(usedMil){ break; }
+      val=(any&&grp>0?grp:1)*1000; grp=0; usedMil=true; any=true; len++;
+      continue;
+    }
+    break;
+  }
+  if(!any) return null;
+  return {value:val+grp,len:len};
+}
+function parseAmountWords(text){
+  var toks=normAlnum(text).split(" ").filter(Boolean);
+  var best=null;
+  for(var i=0;i<toks.length;i++){
+    if(!isNumWord(toks[i])||toks[i]==="y") continue;
+    var r=parseNumWordsAt(toks,i);
+    if(!r||r.value<=0) continue;
+    /* heurística anti-falsos: "dos aguas" no es monto. Aceptar si:
+       valor>=10, o secuencia de 2+ palabras, o va pegado a palabra de dinero */
+    var okSmall = r.value>=10 || r.len>1;
+    if(!okSmall){
+      var prev=toks[i-1]||"", next=toks[i+r.len]||"";
+      if(MONEY_ADJ.test(prev)||MONEY_ADJ.test(next)||SPEND_ADJ.test(prev)) okSmall=true;
+    }
+    if(!okSmall) continue;
+    if(toks[i]==="un"||toks[i]==="una"){ if(!(r.len>1)) continue; } /* "un café" no */
+    var cand={amount:r.value, match:toks.slice(i,i+r.len).join(" ")};
+    if(!best || cand.match.length>best.match.length) best=cand;
+    i+=r.len-1;
+  }
+  return best;
+}
 function parseAmount(text){
   if(!text) return null;
   var t=" "+text.toLowerCase()+" ", best=null;
@@ -881,11 +973,10 @@ function parseAmount(text){
     var score=0; if(hadDollar)score+=3; if(suffix)score+=2; if(raw.indexOf(".")>=0||raw.indexOf(",")>=0)score+=1; if(val>=1)score+=1;
     if(best===null||score>best.score) best={amount:val,match:m[0].trim(),score:score};
   }
-  if(!best){
-    if(/(^|\s)(un\s+)?mil(\s|$)/.test(" "+normAlnum(text)+" ")) return {amount:1000, match:"mil"};
-    return null;
-  }
-  return {amount:Math.round(best.amount*100)/100, match:best.match};
+  if(best) return {amount:Math.round(best.amount*100)/100, match:best.match};
+  var wb=parseAmountWords(text);           /* sin dígitos: números en palabras */
+  if(wb && wb.amount<=99999999) return wb;
+  return null;
 }
 function normalizeNumber(raw){
   raw=raw.trim();
@@ -976,9 +1067,10 @@ function extractPlace(text){
   return out.map(titleWord).join(" ");
 }
 function titleWord(w){ return w.charAt(0).toUpperCase()+w.slice(1); }
-function extractDetails(text, amountMatch){
+function extractDetails(text, amountMatch, accountName){
   var t=text; if(amountMatch) t=t.replace(new RegExp(escapeRe(amountMatch),"i")," ");
   var toks=normAlnum(t).split(" ").filter(Boolean);
+  var amtToks={}; if(amountMatch&&!/\d/.test(amountMatch)){ normAlnum(amountMatch).split(" ").forEach(function(w){ if(w) amtToks[w]=1; }); }
   var KILL={pesos:1,peso:1,varos:1,varo:1,msi:1,meses:1,mes:1,mensualidades:1,tarjeta:1};
   var LEAD={gaste:1,pague:1,compre:1,cobre:1,cobraron:1,costo:1,fueron:1,son:1,me:1,puse:1,cargue:1,pago:1,pagamos:1,gastamos:1,compramos:1};
   var EDGE={de:1,del:1,en:1,el:1,la:1,los:1,las:1,con:1,por:1,y:1,al:1,a:1,un:1,una:1,unos:1,unas:1,mi:1};
@@ -986,7 +1078,9 @@ function extractDetails(text, amountMatch){
   for(var i=0;i<toks.length;i++){ var w=toks[i];
     if(/^\d+$/.test(w)) continue;
     if(KILL[w]) continue;
-    if(aliasIn(w)){ /* quita la cuenta y su conector/artículo previo */
+    if(amtToks[w]){ delete amtToks[w]; continue; } /* palabras del monto hablado (una vez c/u) */
+    var accHit=aliasIn(w);
+    if(accHit && (!accountName || accHit===accountName)){ /* quita LA cuenta elegida y su conector previo */
       while(out.length && (EDGE[out[out.length-1]]||out[out.length-1]==="con")) out.pop();
       continue; }
     out.push(w);
@@ -1044,7 +1138,7 @@ function parseText(text, ctx){
   if(category && rmap[category]) category=rmap[category];
   if(category && CATS[category]){ var k=CATS[category].kind; if(k==="in")type="Ingreso"; else if(k==="out")type="Egreso"; }
   if(!category){ var oi=(type==="Ingreso")?"Otros Ingresos":null; category=(oi&&rmap[oi])?rmap[oi]:oi; }
-  var place=extractPlace(noDate), details=extractDetails(noDate, amtRes?amtRes.match:null);
+  var place=extractPlace(noDate), details=extractDetails(noDate, amtRes?amtRes.match:null, account);
   var et=(category&&CATS[category])?(type==="Egreso"?CATS[category].et:""):"";
   var msi=isTDC(account)?parseMSI(text):1;
 
@@ -1826,7 +1920,7 @@ var V={tab:"reg",prevTab:"reg",mode:"Gasto",amt:"",cat:null,
   account:DB.settings.lastAccount||"Cash",xferFrom:"BBVA Dr",xferTo:"Cash",
   histMonth:E.todayISO().slice(0,7),histMode:"mes",histFrom:"",histTo:"",histScope:"all",resScope:"personal",expScope:"pend",expFrom:"",expTo:"",showTA_N:false,showTA_T:false,showTA_S:false,impTab:"normal",
   resMonth:E.todayISO().slice(0,7),resKind:"Egreso",resPeriod:"mes",resDim:"cat",resFrom:"",resTo:"",resView:"bars",resCalMonth:E.todayISO().slice(0,7),
-  budScope:"personal",budPeriod:"mes",budFrom:"",budTo:""};
+  budScope:"personal",budPeriod:"mes",budFrom:"",budTo:"",resMore:false};
 
 /* ===== iconos ===== */
 var IC={
@@ -1867,7 +1961,7 @@ function ico(n,s){s=s||22;return '<svg width="'+s+'" height="'+s+'" viewBox="0 0
 
 /* ===== render ===== */
 function render(){
-  document.body.className=(V.tab==="reg")?"reg":"";
+  document.body.className=(V.tab==="reg")?"reg":(V.tab==="res"?"res":"");
   var app=document.getElementById("app");
   if(V.tab==="reg") app.innerHTML=viewReg();
   else if(V.tab==="saldo") app.innerHTML=viewSaldo();
@@ -2168,8 +2262,10 @@ function rowClick(fn,id){ if(__rsSuppress===id){ __rsSuppress=null; return; } if
 function rowDup(id){ var e=DB.entries[id]; if(!e) return; var nid=uid(); var copy=Object.assign({},e);
   copy.id=nid; copy.createdAt=Date.now(); copy.updatedAt=Date.now(); copy.exported=false; copy.deleted=false; copy.date=E.todayISO();
   DB.entries[nid]=copy; __rsOpen=null; save(); render(); toast("Duplicado a hoy ✔",true); }
-function rowDel(id){ var e=DB.entries[id]; if(!e) return; e.deleted=true; e.updatedAt=Date.now(); __rsOpen=null; save(); render();
-  toast("Borrado","",{label:"Deshacer",fn:function(){ var x=DB.entries[id]; if(x){ x.deleted=false; x.updatedAt=Date.now(); save(); render(); toast("Restaurado ✔",true); } }}); }
+function renderQuiet(){ document.documentElement.classList.add("noanim"); render();
+  setTimeout(function(){ document.documentElement.classList.remove("noanim"); },50); }
+function rowDel(id){ var e=DB.entries[id]; if(!e) return; e.deleted=true; e.updatedAt=Date.now(); __rsOpen=null; save(); renderQuiet();
+  toast("Borrado","",{label:"Deshacer",fn:function(){ var x=DB.entries[id]; if(x){ x.deleted=false; x.updatedAt=Date.now(); save(); renderQuiet(); toast("Restaurado ✔",true); } }}); }
 
 /* ============ RESUMEN / GRÁFICAS ============ */
 function resRange(){
@@ -2224,25 +2320,48 @@ function viewResumen(){
   }
 
   var hasShared=E.activeEntries(DB.entries).some(function(e){return e.scope==="shared";});
-  var views=[["bars","Barras"],["dona","Dona"],["line","Tendencia"],["cal","Calendario"],["pres","Presupuestos"]];
-  if(hasShared) views.push(["rat","Ratones"]);
-  var vseg='<div class="seg mini">'+views.map(function(x){return '<button class="'+(V.resView===x[0]?"on out":"")+'" onclick="V.resView=\''+x[0]+'\';render()">'+x[1]+'</button>';}).join("")+'</div>';
+  var views=[["bars","Barras","bars"],["dona","Dona","donut"],["line","Tendencia","line"],["cal","Calendario","cal"],["pres","Presupuestos","target"]];
+  if(hasShared) views.push(["rat","Ratones","mouse"]);
+  var isChart=(V.resView==="bars"||V.resView==="dona"||V.resView==="line"||V.resView==="cal");
+  var vseg='<div class="vrow"><div class="seg mini icons">'+views.map(function(x){return '<button class="'+(V.resView===x[0]?"on out":"")+'" title="'+x[1]+'" aria-label="'+x[1]+'" onclick="V.resView=\''+x[0]+'\';render()">'+ico(x[2],17)+'</button>';}).join("")+'</div>'+
+    (isChart?('<button class="iconbtn fbtn'+(V.resMore?" on":"")+'" title="Filtros" onclick="V.resMore=!V.resMore;render()">'+ico("sliders",17)+'</button>'):'')+'</div>';
   var sseg=hasShared?('<div class="seg mini" style="margin-top:6px">'+[["personal","Personal"],["shared","Ratones"],["all","Todo"]].map(function(x){return '<button class="'+(V.resScope===x[0]?"on out":"")+'" onclick="V.resScope=\''+x[0]+'\';render()">'+x[1]+'</button>';}).join("")+'</div>'):"";
+  var scopeLbl={personal:"Personal",shared:"Ratones",all:"Todo"}[V.resScope];
+  var perLbl={sem:"Semana",mes:"Mes",ano:"Año",rango:"Rango"}[V.resPeriod];
+  var dimLbl={cat:"Categoría",acct:"Cuenta",et:"Vital/Extra"}[V.resDim];
 
-  if(V.resView==="rat") return header("Resumen")+_pb+vseg+viewRatones();
-  if(V.resView==="pres") return header("Resumen")+_pb+vseg+viewBudgets();
-  if(V.resView==="cal") return header("Resumen")+vseg+sseg+weekCompareCard()+calView();
+  if(V.resView==="rat") return header("Resumen")+_pb+resWrap(vseg+viewRatones());
+  if(V.resView==="pres") return header("Resumen")+_pb+resWrap(vseg+viewBudgets());
+  if(V.resView==="cal"){
+    var fchipC='<button class="fsummary" onclick="V.resMore=true;render()">'+esc([hasShared?scopeLbl:null].filter(Boolean).join(" · ")||"Filtros")+'</button>';
+    return header("Resumen")+resWrap(vseg+(V.resMore?sseg:(hasShared?fchipC:""))+weekCompareCard()+calView());
+  }
   var chart;
   if(V.resView==="dona") chart=donutView(rows,total,isIn);
   else if(V.resView==="line") chart=trendView(from,to,kind);
   else chart=bars;
 
   var isLine=(V.resView==="line");
-  return header("Resumen")+
-    vseg+ sseg+ pseg+ rangeUI+ ((isLine||V.resScope==="shared")?"":dseg)+ kseg+
+  var filtros=sseg+ pseg+ rangeUI+ ((isLine||V.resScope==="shared")?"":dseg)+ kseg;
+  var fchip='<button class="fsummary" onclick="V.resMore=true;render()">'+esc([hasShared?scopeLbl:null,perLbl,(isLine||isEt)?null:dimLbl,isEt?null:(V.resKind==="Egreso"?"Gastos":"Ingresos")].filter(Boolean).join(" · "))+'</button>';
+  return header("Resumen")+ resWrap(
+    vseg+ (V.resMore?filtros:fchip)+
     '<div class="card" style="text-align:center;padding:12px;margin-top:10px"><div class="k" style="font-size:11px;color:var(--faint);letter-spacing:.05em;text-transform:uppercase;margin-bottom:2px">'+(isEt?"Total gastado":(isIn?"Total ingresos":"Total gastado"))+' · '+esc(resLabel())+'</div><div style="font-family:var(--fd);font-size:32px;letter-spacing:.02em;'+(isIn?"color:var(--green)":"")+'">'+esc(money(total))+'</div></div>'+
     chart+
-    weekCompareCard();
+    weekCompareCard());
+}
+/* dashboard de escritorio: contenido a la izquierda, panel lateral a la derecha */
+function resWrap(content){ return '<div class="resgrid"><div class="rescol">'+content+'</div><aside class="dash-side">'+dashSideHTML()+'</aside></div>'; }
+function dashSideHTML(){
+  var out='<div class="card dcard"><div class="k">Saldo total</div><div style="font-family:var(--fd);font-size:26px">'+esc(money(balance()))+'</div></div>';
+  var sb=E.sharedBalance(DB.entries);
+  if(sb.bal){ var nm=names(); var deudor=sb.bal>0?nm.p2:nm.p1, acreedor=sb.bal>0?nm.p1:nm.p2;
+    out+='<div class="card dcard"><div class="k">Ratones</div><div style="font-size:14px;font-weight:700">'+esc(deudor)+' debe '+esc(money(Math.abs(sb.bal)))+' a '+esc(acreedor)+'</div></div>'; }
+  var buds=Object.keys(budgetMap("personal")).slice(0,4);
+  if(buds.length){ out+='<div class="card dcard"><div class="k">Presupuestos</div>'+buds.map(function(c){return '<div style="font-size:12.5px;margin-top:8px;display:flex;justify-content:space-between"><span>'+esc(c)+'</span></div>'+budgetBarHTML("personal",c,true);}).join("")+'</div>'; }
+  var recent=E.activeEntries(liveEntries()).sort(sortDesc).slice(0,6);
+  if(recent.length){ out+='<div class="card dcard" style="padding:8px 6px"><div class="k" style="padding:6px 10px 2px">Últimos movimientos</div>'+recent.map(function(e){return entryRowBase(e,"openEdit",false,-1);}).join("")+'</div>'; }
+  return out;
 }
 /* --- comparativa semanal --- */
 function sumEgreso(from,to){
@@ -2967,6 +3086,20 @@ function setAccentColor(h){ DB.settings.accentMode="fixed"; DB.settings.accentCo
 /* ============ SHEET (crear/editar) ============ */
 var draft=null,draftId=null,draftMultiIndex=null;
 var __swy=null,__swSh=null,__swAtTop=false,__swInner=null;
+function fmtDateTime(ts){ if(!ts) return ""; var d=new Date(ts);
+  var f=d.toLocaleDateString("es-MX",{day:"numeric",month:"short"})+" "+d.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"});
+  return f; }
+function auditLineHTML(){
+  if(draftId==null) return "";
+  var e=DB.entries[draftId]; if(!e) return "";
+  var who=e.createdBy?(" · "+esc(names()[e.createdBy]||e.createdBy)):"";
+  var out="Creado "+esc(fmtDateTime(e.createdAt))+who;
+  if(e.updatedAt && e.createdAt && e.updatedAt>e.createdAt+60000){
+    var wu=e.updatedBy?(" · "+esc(names()[e.updatedBy]||e.updatedBy)):"";
+    out+="  ·  Editado "+esc(fmtDateTime(e.updatedAt))+wu;
+  }
+  return '<div class="audit">'+out+'</div>';
+}
 function sheetShell(closer,inner){
   window.__sheetCloser=closer;
   setTimeout(wireSheetHead,0);
@@ -3077,7 +3210,7 @@ function renderSheet(title){
     '<div class="daterow"><label class="datechip" onclick="openDatePicker(event,\'dfDate\')">'+ico("cal",15)+'<span id="dateLbl">'+esc(dateChipLabel(d.date))+'</span>'+
       '<input type="date" id="dfDate" value="'+esc(d.date)+'" oninput="if(draft){draft.date=this.value;syncDateUI()}"></label>'+
       '<div class="dquick"><button class="'+(d.date===t?"on":"")+'" onclick="draftDate(\''+t+'\')">Hoy</button><button class="'+(d.date===y?"on":"")+'" onclick="draftDate(\''+y+'\')">Ayer</button></div></div>'+
-    body;
+    body+auditLineHTML();
   root.innerHTML=sheetShell("closeSheet",inner);
   if(prevSheet){ var wr=root.querySelector(".sheetwrap"); if(wr) wr.classList.add("rerender");
     if(prevScroll>0){ var ns=root.querySelector(".sheet"); if(ns) ns.scrollTop=prevScroll; } }
@@ -3351,6 +3484,7 @@ function commitGeneric(data,id,place,category){
   var prevCreatedBy=(id&&DB.entries[id])?DB.entries[id].createdBy:null;
   if(id&&DB.entries[id]){ var e=DB.entries[id]; for(var k in e){ if(k!=="id"&&k!=="createdAt") delete e[k]; } Object.assign(e,data); e.id=id; e.updatedAt=now; e.exported=false; e.deleted=false; target=e; }
   else { var nid=uid(); DB.entries[nid]=Object.assign({id:nid,createdAt:now,updatedAt:now,exported:false,deleted:false},data); target=DB.entries[nid]; }
+  if(id!=null) target.updatedBy=prof(); else target.createdBy=target.createdBy||prof();
   window.__lastCommitId=target.id;
   if(target.kind!=="transfer" && !target.mirror){
     if(target.scope==="shared"){
@@ -3380,7 +3514,7 @@ function undoLastSave(id){
   var e=DB.entries[id]; if(!e) return;
   if(e.scope==="shared"&&!e.mirror) doReject(id);          /* borra el par completo */
   else { e.deleted=true; e.updatedAt=Date.now(); save(); }
-  render(); toast("Deshecho",false);
+  renderQuiet(); toast("Deshecho",false);
 }
 /* ---- notificaciones / cola de revisión ---- */
 function openNotifs(){
@@ -3433,7 +3567,9 @@ function openNotifs(){
   var inner='<h2>Notificaciones</h2>'+body+'<div class="sheetbtns"><button class="btn ghost" onclick="dismissSheet()">Cerrar</button></div>';
   document.getElementById("sheetroot").innerHTML=sheetShell("dismissSheet",inner);
 }
-function doReview(id){ var e=DB.entries[id]; if(!e||e.deleted) return null; var m=findMirrorFor(id);
+function doReview(id){ var e=DB.entries[id]; if(!e||e.deleted) return null;
+  if(e.createdBy===prof()){ toast("Este lo revisa "+names()[otherProf()]+" — tú lo creaste"); return null; }
+  var m=findMirrorFor(id);
   var snap={e:{review:e.review}, m:m?{accept:m.accept,category:m.category}:null, mid:m?m.id:null};
   e.review="reviewed"; e.updatedAt=Date.now();
   if(m && m.personalFor===prof()){ m.accept="accepted"; if(!DB.settings.cats[m.category]) m.category=incomeCatIn(DB.settings.cats); m.updatedAt=Date.now(); }
