@@ -48,9 +48,17 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overscroll-behavior-y:contain;overflow-x:clip;}
 .vrow{display:flex;gap:8px;align-items:stretch;}
 .vrow .seg{flex:1;}
-.vrow .fbtn{flex:0 0 auto;width:44px;border-radius:14px;background:var(--panel);border:1px solid var(--line);color:var(--dim);}
+.vrow .fbtn{flex:0 0 auto;width:44px;border-radius:14px;background:var(--panel);border:1px solid var(--line);color:var(--dim);
+  transition:opacity .2s ease,color .2s ease,border-color .2s ease,background .2s ease;}
 .vrow .fbtn.on{color:var(--acc);border-color:var(--acc);background:color-mix(in srgb,var(--acc) 10%,transparent);}
-.seg.icons button{padding:9px 4px;}
+.vrow .fbtn.ghost{opacity:0;pointer-events:none;} /* conserva el hueco: nada se descuadra */
+/* segmento con píldora deslizante (como la tab bar) */
+.seg.icons{position:relative;touch-action:pan-y;}
+.seg.icons button{padding:9px 4px;position:relative;z-index:1;background:none!important;transition:color .2s ease;}
+.seg.icons button.on{background:none!important;}
+.segpill{position:absolute;top:4px;bottom:4px;border-radius:11px;background:color-mix(in srgb,var(--acc) 13%,transparent);
+  transition:left .26s cubic-bezier(.34,1.3,.5,1),width .26s cubic-bezier(.34,1.3,.5,1);pointer-events:none;z-index:0;}
+.seg.icons.drag .segpill{transition:none;}
 .fsummary{display:block;width:100%;margin-top:6px;background:none;border:1px dashed var(--line);border-radius:12px;padding:8px 12px;font-size:12px;color:var(--faint);text-align:center;}
 .fsummary:active{transform:scale(.98);}
 .dash-side{display:none;}
@@ -62,8 +70,26 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
   .sheetwrap{align-items:center;}
   body{background:color-mix(in srgb,var(--bg) 92%, var(--acc) 3%);}
 }
+.only-mob{display:block;}
+.dsp{height:14px;}
+.reg-side{display:none;}
+.kbdcard .kbdrow{display:flex;align-items:center;gap:10px;margin-top:7px;font-size:12px;color:var(--dim);}
+.kbdcard kbd{font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px solid var(--line);
+  border-radius:6px;padding:2px 7px;color:var(--bone);min-width:52px;text-align:center;}
 @media (min-width:1100px){
-  body.res #app{max-width:980px;}
+  body.res #app,body.saldo #app,body.hist #app,body.exp #app,body.set #app{max-width:980px;}
+  .only-mob{display:none;}
+  .setgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 20px;align-items:start;}
+  .setgrid>.sblk{break-inside:avoid;}
+  .expgrid{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
+  /* Registrar: teclado a la izquierda, contexto a la derecha */
+  body.reg #app{max-width:980px;flex-direction:row;gap:22px;align-items:stretch;padding-top:0;}
+  body.reg .head{position:absolute;top:10px;left:16px;right:16px;}
+  body.reg .regpage{flex:1 1 auto;max-width:560px;padding-top:58px;}
+  body.reg .reg-side{display:block;flex:0 0 340px;overflow-y:auto;padding:58px 0 20px;}
+  body.reg .reg-side .dcard{margin-top:14px;padding:14px;}
+  body.reg .reg-side .dcard:first-child{margin-top:0;}
+  body.reg .reg-side .k{font-size:10.5px;color:var(--faint);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px;}
   .resgrid{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;}
   .dash-side{display:block;position:sticky;top:14px;}
   .dash-side .dcard{margin-top:14px;padding:14px;}
@@ -1955,13 +1981,18 @@ var IC={
   eyeOff:'<path d="M4 4l16 16"/><path d="M9.9 5.2A10.4 10.4 0 0 1 12 5c6.3 0 9.8 7 9.8 7a17.5 17.5 0 0 1-3.2 4.1M6.6 6.6C3.8 8.5 2.2 12 2.2 12s3.5 7 9.8 7c1.4 0 2.7-.3 3.8-.9"/><path d="M9.9 9.9a2.9 2.9 0 0 0 4.1 4.1"/>',
   bell:'<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.5 20a1.8 1.8 0 0 0 3 0"/>',
   roll:'<path d="M20.5 8A8.5 8.5 0 1 0 21 13.5"/><path d="M21 4v4.5h-4.5"/>',
+  bars:'<path d="M5 20V12M12 20V4M19 20v-6"/>',
+  donut:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2"/><path d="M12 4v4.8"/>',
+  line:'<path d="M3 16.5l5-5.5 4 3 6-7.5"/><path d="M3 20.5h18"/>',
+  target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>',
+  sliders:'<path d="M4 8h9M17.5 8H20M4 16h3.5M12 16h8"/><circle cx="15" cy="8" r="2"/><circle cx="9.5" cy="16" r="2"/>',
   cloudOff:'<path d="M4 4l16 16"/><path d="M7.5 18.5h9.3a4 4 0 0 0 1.9-.5M20.7 15a4 4 0 0 0-3.2-5.5A6 6 0 0 0 8 7.2M4.6 8.6A6 6 0 0 0 6 18.4"/>'
 };
 function ico(n,s){s=s||22;return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(IC[n]||"")+'</svg>';}
 
 /* ===== render ===== */
 function render(){
-  document.body.className=(V.tab==="reg")?"reg":(V.tab==="res"?"res":"");
+  document.body.className=(V.tab==="reg")?"reg":V.tab;
   var app=document.getElementById("app");
   if(V.tab==="reg") app.innerHTML=viewReg();
   else if(V.tab==="saldo") app.innerHTML=viewSaldo();
@@ -1973,6 +2004,7 @@ function render(){
   var changed=(V.tab!==render._last); render._last=V.tab;
   if(changed){ app.classList.remove("viewfade"); void app.offsetWidth; app.classList.add("viewfade"); if(V.tab!=="reg") window.scrollTo(0,0); }
   applyAccent();
+  if(V.tab==="res") syncSegPill();
 }
 function go(tab){ if(tab===V.tab) return; if(tab==="set") V.prevTab=(V.tab==="set"?V.prevTab:V.tab); V.tab=tab; buzz(5); render(); }
 function back(){ V.tab=V.prevTab||"reg"; render(); }
@@ -2033,7 +2065,22 @@ function viewReg(){
       chips+
       '<div class="pad">'+pad+'</div>'+
       '<button class="btn primary" onclick="quickSave()">'+ico("check",20)+' Guardar</button>'+
-    '</div>';
+    '</div>'+
+    '<aside class="reg-side">'+regSideHTML()+'</aside>';
+}
+/* panel lateral de Registrar en escritorio: contexto + atajos de teclado */
+function regSideHTML(){
+  var out='<div class="card dcard"><div class="k">Efectivo en mano</div><div style="font-family:var(--fd);font-size:24px">'+esc(money(balance()))+'</div></div>';
+  var pend=pendingForMe().length, sq=siriQueue().length;
+  if(pend||sq){ out+='<button class="card dcard" style="width:100%;text-align:left" onclick="openNotifs()"><div class="k">Por revisar</div>'+
+    '<div style="font-size:14px;font-weight:700">'+(pend?(pend+" pendiente"+(pend>1?"s":"")):"")+(pend&&sq?" · ":"")+(sq?(sq+" de Siri"):"")+'</div></button>'; }
+  var recent=E.activeEntries(liveEntries()).sort(sortDesc).slice(0,7);
+  if(recent.length) out+='<div class="card dcard" style="padding:8px 6px"><div class="k" style="padding:6px 10px 2px">Últimos movimientos</div>'+
+    recent.map(function(e){return entryRowBase(e,"openEdit",false,-1);}).join("")+'</div>';
+  out+='<div class="card dcard kbdcard"><div class="k">Atajos de teclado</div>'+
+    [["0-9 . ⌫","monto"],["Enter","guardar"],["/","dictar"],["⌘K","buscar"],["Esc","cerrar"]].map(function(k){
+      return '<div class="kbdrow"><kbd>'+esc(k[0])+'</kbd><span>'+esc(k[1])+'</span></div>'; }).join("")+'</div>';
+  return out;
 }
 function acctPill(lbl,name,onclick){
   return '<button class="acctpill" onclick="'+onclick+'"><span class="lbl">'+lbl+'</span><span class="cdot" style="background:'+esc(colorFor(name))+'"></span>'+
@@ -2130,15 +2177,15 @@ function openSheetFromPad(){
 /* ============ SALDO ============ */
 function viewSaldo(){
   var b=balance(),mIso=E.todayISO().slice(0,7),t=cashTotalsMine(mIso+"-01",mIso+"-31");
-  return header()+pendingBannerHTML()+syncWarnHTML()+
-    '<div class="card bigbal"><div class="lbl">Efectivo en mano</div><div class="v'+(b<0?" neg":"")+'">'+esc(money(b))+'</div></div>'+
+  var main='<div class="card bigbal"><div class="lbl">Efectivo en mano</div><div class="v'+(b<0?" neg":"")+'">'+esc(money(b))+'</div></div>'+
     '<div class="twocol"><div class="card"><div class="k">Entró (mes)</div><div class="val in">'+esc(money(t.inn))+'</div></div>'+
     '<div class="card"><div class="k">Salió (mes)</div><div class="val out">'+esc(money(t.out))+'</div></div></div>'+
-    ratMiniCard()+
+    '<div class="sechead"><h3>Últimos movimientos</h3></div>'+ recentList(12);
+  var side=ratMiniCard()+
     '<button class="btn ghost" onclick="reconcile()">Cuadrar efectivo con lo que traigo</button>'+
     '<div style="height:10px"></div>'+
-    '<button class="btn ghost" onclick="editStart()">Saldo inicial ('+esc(money(DB.settings.startingBalance))+')</button>'+
-    '<div class="sechead"><h3>Últimos movimientos</h3></div>'+ recentList(7);
+    '<button class="btn ghost" onclick="editStart()">Saldo inicial ('+esc(money(DB.settings.startingBalance))+')</button>';
+  return header()+pendingBannerHTML()+syncWarnHTML()+ deskGrid(main,side);
 }
 function ratMiniCard(){
   if(!E.activeEntries(DB.entries).some(function(e){return e.scope==="shared";})) return "";
@@ -2193,9 +2240,9 @@ function viewHist(){
         '<button onclick="shiftMonth(-1)">'+ico("chevL",18)+'</button><button onclick="shiftMonth(1)">'+ico("chevR",18)+'</button></div></div>';
   var hasShared=E.activeEntries(DB.entries).some(function(e){return e.scope==="shared";});
   var scopeSeg=hasShared?('<div class="seg mini" style="margin-bottom:10px">'+[["all","Todo"],["personal","Personal"],["shared","Ratones"]].map(function(x){return '<button class="'+(V.histScope===x[0]?"on out":"")+'" onclick="V.histScope=\''+x[0]+'\';render()">'+x[1]+'</button>';}).join("")+'</div>'):"";
-  return header()+head+ scopeSeg+
-    '<div class="twocol"><div class="card"><div class="k">Efectivo entró</div><div class="val in">'+esc(money(t.inn))+'</div></div>'+
-    '<div class="card"><div class="k">Efectivo salió</div><div class="val out">'+esc(money(t.out))+'</div></div></div>'+ body;
+  var cards='<div class="twocol"><div class="card"><div class="k">Efectivo entró</div><div class="val in">'+esc(money(t.inn))+'</div></div>'+
+    '<div class="card"><div class="k">Efectivo salió</div><div class="val out">'+esc(money(t.out))+'</div></div></div>';
+  return header()+head+ deskGrid(scopeSeg+body, cards+'<div class="dsp"></div>'+dashSideHTML(true), cards);
 }
 function shiftMonth(d){ var dt=E.fromISO(V.histMonth+"-01"); dt.setMonth(dt.getMonth()+d); V.histMonth=E.iso(dt).slice(0,7); render(); }
 function sortDesc(a,b){ return (b.date+"~"+(b.createdAt||0))<(a.date+"~"+(a.createdAt||0))?-1:1; }
@@ -2323,8 +2370,9 @@ function viewResumen(){
   var views=[["bars","Barras","bars"],["dona","Dona","donut"],["line","Tendencia","line"],["cal","Calendario","cal"],["pres","Presupuestos","target"]];
   if(hasShared) views.push(["rat","Ratones","mouse"]);
   var isChart=(V.resView==="bars"||V.resView==="dona"||V.resView==="line"||V.resView==="cal");
-  var vseg='<div class="vrow"><div class="seg mini icons">'+views.map(function(x){return '<button class="'+(V.resView===x[0]?"on out":"")+'" title="'+x[1]+'" aria-label="'+x[1]+'" onclick="V.resView=\''+x[0]+'\';render()">'+ico(x[2],17)+'</button>';}).join("")+'</div>'+
-    (isChart?('<button class="iconbtn fbtn'+(V.resMore?" on":"")+'" title="Filtros" onclick="V.resMore=!V.resMore;render()">'+ico("sliders",17)+'</button>'):'')+'</div>';
+  var vseg='<div class="vrow"><div class="seg mini icons" id="vseg" ontouchstart="vsegDown(event)" onmousedown="vsegDown(event)">'+views.map(function(x,i){return '<button class="'+(V.resView===x[0]?"on out":"")+'" data-i="'+i+'" data-v="'+x[0]+'" title="'+x[1]+'" aria-label="'+x[1]+'" onclick="V.resView=\''+x[0]+'\';render()">'+ico(x[2],17)+'</button>';}).join("")+
+      '<span class="segpill" id="segpill"></span></div>'+
+    '<button class="iconbtn fbtn'+(V.resMore?" on":"")+(isChart?"":" ghost")+'" title="Filtros" '+(isChart?'onclick="V.resMore=!V.resMore;render()"':'disabled')+'>'+ico("sliders",17)+'</button></div>';
   var sseg=hasShared?('<div class="seg mini" style="margin-top:6px">'+[["personal","Personal"],["shared","Ratones"],["all","Todo"]].map(function(x){return '<button class="'+(V.resScope===x[0]?"on out":"")+'" onclick="V.resScope=\''+x[0]+'\';render()">'+x[1]+'</button>';}).join("")+'</div>'):"";
   var scopeLbl={personal:"Personal",shared:"Ratones",all:"Todo"}[V.resScope];
   var perLbl={sem:"Semana",mes:"Mes",ano:"Año",rango:"Rango"}[V.resPeriod];
@@ -2350,16 +2398,65 @@ function viewResumen(){
     chart+
     weekCompareCard());
 }
-/* dashboard de escritorio: contenido a la izquierda, panel lateral a la derecha */
-function resWrap(content){ return '<div class="resgrid"><div class="rescol">'+content+'</div><aside class="dash-side">'+dashSideHTML()+'</aside></div>'; }
-function dashSideHTML(){
+/* ---- píldora deslizante del segmento de vistas (sigue el dedo) ---- */
+function segPillTo(btn,anim){
+  var seg=document.getElementById("vseg"), pill=document.getElementById("segpill");
+  if(!seg||!pill||!btn) return;
+  if(!anim) seg.classList.add("drag");
+  pill.style.left=btn.offsetLeft+"px"; pill.style.width=btn.offsetWidth+"px";
+  if(anim) seg.classList.remove("drag");
+}
+function syncSegPill(){
+  var seg=document.getElementById("vseg"); if(!seg) return;
+  var on=seg.querySelector("button.on"); if(on) segPillTo(on,true);
+}
+function segBtnAt(seg,clientX){
+  var bs=[].slice.call(seg.querySelectorAll("button")), best=bs[0];
+  for(var i=0;i<bs.length;i++){ var r=bs[i].getBoundingClientRect();
+    if(clientX>=r.left&&clientX<=r.right) return bs[i];
+    if(clientX>r.right) best=bs[i]; }
+  return best;
+}
+function vsegDown(ev){
+  var seg=document.getElementById("vseg"); if(!seg) return;
+  var startX=(ev.touches?ev.touches[0].clientX:ev.clientX), moved=false, cur=null;
+  seg.classList.add("drag");
+  function move(e){
+    var x=(e.touches?e.touches[0].clientX:e.clientX);
+    if(!moved && Math.abs(x-startX)<4) return;
+    moved=true; if(e.cancelable) e.preventDefault();
+    var b=segBtnAt(seg,x); if(!b) return;
+    if(b!==cur){ cur=b; buzz(4);
+      seg.querySelectorAll("button").forEach(function(x2){ x2.classList.remove("on","out"); });
+      b.classList.add("on","out"); }
+    segPillTo(b,false);
+  }
+  function up(){
+    document.removeEventListener("touchmove",move,{passive:false}); document.removeEventListener("touchend",up);
+    document.removeEventListener("mousemove",move); document.removeEventListener("mouseup",up);
+    seg.classList.remove("drag");
+    if(moved && cur){ V.resView=cur.getAttribute("data-v"); render(); }
+  }
+  document.addEventListener("touchmove",move,{passive:false}); document.addEventListener("touchend",up);
+  document.addEventListener("mousemove",move); document.addEventListener("mouseup",up);
+}
+/* dashboard de escritorio: contenido a la izquierda, panel lateral a la derecha.
+   En movil el panel lateral se oculta por CSS; "mobileFallback" se muestra solo ahi. */
+function deskGrid(main, side, mobileFallback){
+  return '<div class="resgrid">'+
+    (mobileFallback?('<div class="only-mob">'+mobileFallback+'</div>'):'')+
+    '<div class="rescol">'+main+'</div>'+
+    '<aside class="dash-side">'+side+'</aside></div>';
+}
+function resWrap(content){ return deskGrid(content, dashSideHTML()); }
+function dashSideHTML(noRecent){
   var out='<div class="card dcard"><div class="k">Saldo total</div><div style="font-family:var(--fd);font-size:26px">'+esc(money(balance()))+'</div></div>';
   var sb=E.sharedBalance(DB.entries);
   if(sb.bal){ var nm=names(); var deudor=sb.bal>0?nm.p2:nm.p1, acreedor=sb.bal>0?nm.p1:nm.p2;
     out+='<div class="card dcard"><div class="k">Ratones</div><div style="font-size:14px;font-weight:700">'+esc(deudor)+' debe '+esc(money(Math.abs(sb.bal)))+' a '+esc(acreedor)+'</div></div>'; }
   var buds=Object.keys(budgetMap("personal")).slice(0,4);
   if(buds.length){ out+='<div class="card dcard"><div class="k">Presupuestos</div>'+buds.map(function(c){return '<div style="font-size:12.5px;margin-top:8px;display:flex;justify-content:space-between"><span>'+esc(c)+'</span></div>'+budgetBarHTML("personal",c,true);}).join("")+'</div>'; }
-  var recent=E.activeEntries(liveEntries()).sort(sortDesc).slice(0,6);
+  var recent=noRecent?[]:E.activeEntries(liveEntries()).sort(sortDesc).slice(0,6);
   if(recent.length){ out+='<div class="card dcard" style="padding:8px 6px"><div class="k" style="padding:6px 10px 2px">Últimos movimientos</div>'+recent.map(function(e){return entryRowBase(e,"openEdit",false,-1);}).join("")+'</div>'; }
   return out;
 }
@@ -2556,7 +2653,7 @@ function viewExport(){
   var nN=tsvN?tsvN.split("\n").length:0, nT=tsvT?tsvT.split("\n").length:0, nS=tsvS?tsvS.split("\n").length:0;
   var hasShared=E.activeEntries(DB.entries).some(function(e){return e.scope==="shared";});
   return header("Exportar")+
-    '<div class="seg">'+seg+'</div>'+ rangeUI+
+    '<div class="seg">'+seg+'</div>'+ rangeUI+'<div class="expgrid">'+
     '<div class="card" style="margin-top:12px"><p style="margin:0;color:var(--dim);font-size:13px;line-height:1.5">Pega directo en tu hoja. <b style="color:var(--bone)">Cuentas normales</b> abajo y <b style="color:var(--bone)">TDC</b> aparte, cada una en el orden de tus columnas.</p></div>'+
     '<div class="sechead" style="margin-top:6px"><h3>Cuentas normales · '+nN+'</h3>'+
       '<div class="nav"><button style="width:auto;padding:0 10px;font-size:12px" onclick="V.showTA_N=!V.showTA_N;render()">'+(V.showTA_N?"Ocultar":"Ver texto")+'</button></div></div>'+
@@ -2576,6 +2673,7 @@ function viewExport(){
       '<button class="btn primary mini" style="margin-top:10px" onclick="copyExpShared('+nS+')">'+ico("copy",17)+' Copiar Ratones</button>'+
       (V.expScope==="pend"?'<p style="font-size:12px;color:var(--faint);margin:8px 0 0">En «Pendientes» solo salen los Ratones que pagaste tú; los del otro los exporta él/ella (así no se duplican en el sheet compartido).</p>':'')
     ):"")+
+    '</div>'+
     '<div style="height:10px"></div>'+
     '<button class="btn ghost mini" onclick="markExported()">'+ico("check",17)+' Marcar como exportados</button>'+
     '<div class="sblk" style="margin-top:16px"><h3>Google Sheets (opcional)</h3>'+
@@ -2934,7 +3032,7 @@ function fmtMonth(m){ var d=new Date(+m.slice(0,4), +m.slice(5,7)-1, 1); var t=d
 function toggleSimpleForm(){ DB.settings.simpleForm=!DB.settings.simpleForm; save(); buzz(6); render(); }
 function togglePrivacy(){ DB.settings.hideAmts=!DB.settings.hideAmts; save(); buzz(6); render(); }
 function viewSettings(){
-  return header("Ajustes",true)+
+  return header("Ajustes",true)+'<div class="setgrid">'+
     appearanceBlock()+
     syncBlock()+
     ratonesBlock()+
@@ -2957,7 +3055,7 @@ function viewSettings(){
     learnBlock()+
     '<div class="sblk"><h3>Respaldo</h3><p>Descarga o restaura todos tus datos.</p><div style="display:flex;gap:10px"><button class="btn ghost mini" style="flex:1" onclick="backup()">'+ico("down",16)+' Descargar</button><button class="btn ghost mini" style="flex:1" onclick="document.getElementById(\'imp\').click()">Importar</button></div><input type="file" id="imp" accept="application/json" class="hide" onchange="importBackup(event)"></div>'+
     supaBlock()+
-    '<div style="text-align:center;color:var(--faint);font-size:12px;margin:18px 0 8px">Cashy · sin fricción</div>';
+    '</div><div style="text-align:center;color:var(--faint);font-size:12px;margin:18px 0 8px">Cashy · sin fricción</div>';
 }
 function saveStart(){ var v=(document.getElementById("stBal")||{}).value,n=parseFloat(String(v).replace(/[^0-9.\-]/g,"")); if(isNaN(n)){toast("Monto no válido");return;} DB.settings.startingBalance=Math.round(n*100)/100; save(); toast("Guardado",true); }
 function saveRem(){ var v=(document.getElementById("remTime")||{}).value; if(v){ DB.settings.reminderTime=v; save(); toast("Hora guardada",true); } }
