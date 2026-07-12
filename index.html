@@ -65,6 +65,19 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .dash-side{display:none;}
 /* ===== escritorio ===== */
 
+.splitlink{display:block;width:100%;margin:14px 0 2px;background:none;border:1px dashed var(--line);border-radius:12px;
+  padding:10px;font-size:12.5px;color:var(--dim);display:flex;align-items:center;justify-content:center;gap:6px;}
+.spline{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:10px;margin-bottom:8px;}
+.sprow1{display:flex;gap:8px;align-items:center;}
+.spamt{width:86px;flex:0 0 auto;border:1px solid var(--line);border-radius:10px;padding:9px 10px;font-size:15px;background:var(--panel);color:var(--text);font-family:var(--fd);}
+.spcat{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:9px 8px;font-size:13.5px;background:var(--panel);color:var(--text);}
+.spscope{flex:0 0 auto;width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--faint);display:grid;place-items:center;}
+.spscope.on{color:var(--acc);border-color:var(--acc);background:color-mix(in srgb,var(--acc) 10%,transparent);}
+.sprm{flex:0 0 auto;width:30px;height:38px;border:none;background:none;color:var(--faint);}
+.spdet{width:100%;margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px;background:var(--panel);color:var(--text);}
+.spleft{margin:12px 0 4px;text-align:center;font-size:13.5px;font-weight:700;color:var(--gold,#b8860b);}
+.spleft.ok{color:var(--good,#1d9e63);}
+.spleft.neg{color:var(--bad,#d33);}
 .only-mob{display:block;}
 .dsp{height:14px;}
 .reg-side{display:none;}
@@ -1275,7 +1288,7 @@ function parseMulti(text, ctx){
   ctx=ctx||{};
   var today=ctx.today||todayISO();
   // 1º conectores (coma/"y"/";"…); 2º por montos (dictado sin puntuación)
-  var pieces=String(text||"").split(/\s*(?:,|\+|;|\bo\b| y | e | tambien | también | mas | más | luego | despues | después )\s*/i).map(function(s){return s.trim();}).filter(Boolean);
+  var pieces=String(text||"").split(/\s*(?:,|\+|;|\bo\b| y | e | pero | aunque | tambien | también | mas | más | luego | despues | después )\s*/i).map(function(s){return s.trim();}).filter(Boolean);
   if(pieces.length<2){ pieces=splitMovements(text)||[text]; }
   if(!pieces || pieces.length<2){ return [parseText(text,ctx)]; }
   var out=[], valid=0, carryDate=today, carryAcct=ctx.account||"Cash";
@@ -1286,7 +1299,7 @@ function parseMulti(text, ctx){
     if(det) carryAcct=det;
     var dm=parseDate(p, today);
     if(dm.match){ carryDate=dm.date; } else { r.date=carryDate; }
-    out.push(r); valid++;
+    r._seg=p; out.push(r); valid++;
   });
   if(valid<2) return [parseText(text,ctx)];
   return out;
@@ -2210,6 +2223,27 @@ function interpret(){
   var el=document.getElementById("nlText"); if(!el) return;
   var text=(el.value||"").trim(); if(!text){ toast("Escribe o dicta algo"); return; }
   var drafts=E.parseMulti(text,parseCtx());
+  /* patrón "total + desglose": si el primer monto = suma del resto, el primero
+     es el pago total → se descarta y hereda su cuenta/lugar a las líneas */
+  if(drafts.length>=3){
+    var rest=drafts.slice(1), sum=rest.reduce(function(x,d){return x+(d.amount||0);},0);
+    if(drafts[0].amount && Math.abs(drafts[0].amount-sum)<0.01){
+      var head=drafts[0];
+      if(head.kind==="transfer"||!head.place){ /* re-lee el encabezado como gasto para rescatar lugar/cuenta */
+        try{ head=E.parseText(String(head._seg||"").replace(/\b(pague|pago|pagamos)\b/gi,"gaste"), parseCtx()); }catch(e){}
+      }
+      var headPlace=head.place;
+      if(!headPlace){ /* "en costco": si el lugar coincide con alias de una TDC, extractPlace lo salta — recupéralo como texto */
+        var mm=String(head._seg||drafts[0]._seg||"").match(/\ben\s+(?:la\s+|el\s+)?([a-záéíóúñ][\wáéíóúñ]{2,})/i);
+        if(mm) headPlace=mm[1].charAt(0).toUpperCase()+mm[1].slice(1).toLowerCase();
+      }
+      rest.forEach(function(d){
+        if(headPlace && !d.place) d.place=headPlace;
+        if(head.account && head.account!==parseCtx().account && d.account===parseCtx().account) d.account=head.account;
+      });
+      drafts=rest;
+    }
+  }
   if(drafts.length>1){ openMulti(drafts); return; }
   var r=drafts[0];
   if(r.kind==="transfer"){
@@ -3117,8 +3151,8 @@ function viewSettings(){
     accountsBlock()+
     recurringBlock()+
     categoriesBlock()+
-    customRulesBlock()+
     catETBlock()+
+    customRulesBlock()+
     learnBlock()+
     '<div class="sblk"><h3>Respaldo</h3><p>Descarga o restaura todos tus datos.</p><div style="display:flex;gap:10px"><button class="btn ghost mini" style="flex:1" onclick="backup()">'+ico("down",16)+' Descargar</button><button class="btn ghost mini" style="flex:1" onclick="document.getElementById(\'imp\').click()">Importar</button></div><input type="file" id="imp" accept="application/json" class="hide" onchange="importBackup(event)"></div>'+
     supaBlock()+
@@ -3190,7 +3224,81 @@ function categoriesBlock(){
   return '<div class="sblk"><h3>Categorías</h3><p>Renombra o quita categorías, o agrega las tuyas.</p>'+rows+
     '<div class="field" style="margin-top:10px"><input id="ctNew" placeholder="Nueva categoría"></div>'+
     '<div class="field"><select id="ctKind"><option value="out">Gasto</option><option value="in">Ingreso</option><option value="neutral">Neutro</option></select></div>'+
-    '<button class="btn ghost mini" onclick="addCat()">Agregar categoría</button></div>';
+    '<button class="btn ghost mini" onclick="addCat()">Agregar categoría</button>'+
+    '<div style="border-top:1px dashed var(--line);margin:14px 0 10px"></div>'+
+    '<p style="font-size:12.5px"><b>Fusionar categorías</b> — mueve todos los registros, presupuesto y reglas de una a otra.</p>'+
+    '<div style="display:flex;gap:8px"><select id="mgFrom" style="flex:1">'+E.catList().map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+'</option>';}).join("")+'</select>'+
+    '<select id="mgTo" style="flex:1">'+E.catList().map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+'</option>';}).join("")+'</select></div>'+
+    '<button class="btn ghost mini" style="margin-top:8px" onclick="mergeCats()">Fusionar primera → segunda</button>'+
+    '<div style="border-top:1px dashed var(--line);margin:14px 0 10px"></div>'+
+    '<p style="font-size:12.5px"><b>Paquete Excel de Dany</b> — carga tus categorías y ~70 palabras clave (uber eats→Delivery, croquetas→Familia/Mascotas, jordan→Zapatos…) para que el dictado las reconozca desde el día uno.</p>'+
+    '<button class="btn ghost mini" onclick="importDanyPack()">Cargar categorías y diccionario</button></div>';
+}
+function mergeCats(){
+  var from=(document.getElementById("mgFrom")||{}).value, to=(document.getElementById("mgTo")||{}).value;
+  if(!from||!to||from===to){ toast("Elige dos categorías distintas"); return; }
+  if(!confirm("¿Mover TODO de «"+from+"» a «"+to+"»? Esto no se puede deshacer.")) return;
+  var n=0;
+  Object.keys(DB.entries).forEach(function(id){ var e=DB.entries[id];
+    if(e&&e.category===from&&e.scope!=="shared"&&!e.mirror){ e.category=to; e.updatedAt=Date.now(); n++; } });
+  /* presupuesto: se suma al destino */
+  var bm=budgetMap("personal");
+  if(bm[from]!=null){ bm[to]=(bm[to]||0)+bm[from]; delete bm[from]; }
+  var rm=rollMap("personal"); if(rm&&rm[from]){ rm[to]=true; delete rm[from]; }
+  /* diccionario y lugares aprendidos apuntan al destino */
+  (DB.settings.customRules||[]).forEach(function(r){ if(r[1]===from) r[1]=to; });
+  Object.keys(DB.learn.places||{}).forEach(function(p){ if(DB.learn.places[p]===from) DB.learn.places[p]=to; });
+  if(DB.settings.catET&&DB.settings.catET[from]!=null) delete DB.settings.catET[from];
+  if(DB.settings.cats[from]) delete DB.settings.cats[from];
+  applyConfig(); save(); render();
+  toast("Fusionadas: "+n+" registros a «"+to+"» ✔",true);
+}
+/* paquete precargado del Excel de Dany: categorías + diccionario de dictado */
+var DANY_PACK={
+  cats:[["Delivery","Extraordinario"],["Impuestos","Vital"],["Videojuegos","Extraordinario"],["Peluquería","Extraordinario"],
+    ["Cafetería Trabajo","Vital"],["Familia/Mascotas","Vital"],["Gadgets","Extraordinario"],["Zapatos","Extraordinario"],
+    ["Ropa","Extraordinario"],["Uber","Extraordinario"],["Apuestas","Extraordinario"],["Consultas/Estudios","Vital"],
+    ["Medicina","Vital"],["Productos/equipo","Extraordinario"],["Donaciones","Extraordinario"],["Salidas","Extraordinario"],
+    ["Suscripciones","Vital"],["Estacionamiento","Extraordinario"],["Regalos","Extraordinario"]],
+  rules:[["uber eats","Delivery"],["rappi","Delivery"],["tortas","Delivery"],
+    ["cfe","Electricidad"],["luz","Electricidad"],
+    ["pemex","Gasolina"],
+    ["isr","Impuestos"],["sat","Impuestos"],
+    ["ps5","Videojuegos"],["ps store","Videojuegos"],["videojuego","Videojuegos"],
+    ["corte de cabello","Peluquería"],["peluqueria","Peluquería"],["frankenstein","Peluquería"],
+    ["regalo","Regalos"],["regalito","Regalos"],["regalitos","Regalos"],["blusa","Regalos"],
+    ["comida trabajo","Cafetería Trabajo"],["cafeteria trabajo","Cafetería Trabajo"],
+    ["perro","Familia/Mascotas"],["perra","Familia/Mascotas"],["perrita","Familia/Mascotas"],["croquetas","Familia/Mascotas"],
+    ["cable","Gadgets"],["apple watch","Gadgets"],["microfono","Gadgets"],["cargador","Gadgets"],
+    ["coche","Mecánico"],
+    ["jordan","Zapatos"],["tenis","Zapatos"],["air force","Zapatos"],
+    ["pants","Ropa"],["pantalon","Ropa"],["calcetines","Ropa"],["boxer","Ropa"],["chamarra","Ropa"],["short","Ropa"],["playera","Ropa"],["polo","Ropa"],
+    ["uber","Uber"],
+    ["bet365","Apuestas"],["apuesta","Apuestas"],
+    ["recarga","Teléfono"],["plan celular","Teléfono"],
+    ["doctor","Consultas/Estudios"],["consulta","Consultas/Estudios"],
+    ["estacionamiento","Estacionamiento"],["parco","Estacionamiento"],["viene viene","Estacionamiento"],
+    ["farmacia","Medicina"],["medicina","Medicina"],
+    ["tianguis","Abarrotes"],["pollo","Abarrotes"],["huevo","Abarrotes"],["tortillas","Abarrotes"],["desechables","Abarrotes"],["papitas","Abarrotes"],
+    ["plato","Hogar"],
+    ["perfume","Productos/equipo"],
+    ["propina","Restaurante"],["sushi","Restaurante"],["hamburguesas","Restaurante"],["tapioca","Restaurante"],["comida china","Restaurante"],["poke","Restaurante"],["nieve","Restaurante"],["nieves","Restaurante"],["petrita","Restaurante"],["sumbananas","Restaurante"],["tamales","Restaurante"],
+    ["limosna","Donaciones"],["templo","Donaciones"],["donacion","Donaciones"],
+    ["cine","Salidas"],["cinepolis","Salidas"],
+    ["amazon prime","Suscripciones"],["icloud","Suscripciones"],["netflix","Suscripciones"],["spotify","Suscripciones"],["suscripcion","Suscripciones"],
+    ["mantenimiento condominio","Renta"]]
+};
+function importDanyPack(){
+  var nc=0,nr=0;
+  DANY_PACK.cats.forEach(function(c){
+    if(!DB.settings.cats[c[0]]){ DB.settings.cats[c[0]]={kind:"out",et:c[1],orig:null}; nc++; }
+    DB.settings.catET=DB.settings.catET||{}; if(DB.settings.catET[c[0]]==null) DB.settings.catET[c[0]]=c[1];
+  });
+  DB.settings.customRules=DB.settings.customRules||[];
+  var have={}; DB.settings.customRules.forEach(function(r){ have[r[0]]=1; });
+  DANY_PACK.rules.forEach(function(r){ if(!have[r[0]]){ DB.settings.customRules.push([r[0],r[1]]); nr++; } });
+  applyConfig(); save(); render();
+  toast("Listo: "+nc+" categorías y "+nr+" palabras nuevas ✔",true);
 }
 function catUsed(name){ return E.activeEntries(DB.entries).some(function(e){ return e.category===name; }); }
 function addCat(){ var nm=((document.getElementById("ctNew")||{}).value||"").trim(); var kind=(document.getElementById("ctKind")||{}).value||"out"; if(!nm){toast("Escribe el nombre");return;} if(DB.settings.cats[nm]){toast("Ya existe");return;} DB.settings.cats[nm]={kind:kind,et:kind==="out"?"Extraordinario":"",orig:null}; applyConfig(); save(); render(); toast("Categoría agregada",true); }
@@ -3375,7 +3483,9 @@ function renderSheet(title){
     '<div class="daterow"><label class="datechip" onclick="openDatePicker(event,\'dfDate\')">'+ico("cal",15)+'<span id="dateLbl">'+esc(dateChipLabel(d.date))+'</span>'+
       '<input type="date" id="dfDate" value="'+esc(d.date)+'" oninput="if(draft){draft.date=this.value;syncDateUI()}"></label>'+
       '<div class="dquick"><button class="'+(d.date===t?"on":"")+'" onclick="draftDate(\''+t+'\')">Hoy</button><button class="'+(d.date===y?"on":"")+'" onclick="draftDate(\''+y+'\')">Ayer</button></div></div>'+
-    body+auditLineHTML();
+    body+
+    ((draftId==null&&d.kind!=="transfer"&&d.type!=="Ingreso"&&!d.mirror)?'<button class="splitlink" onclick="openSplitFromDraft()">'+ico("xfer",14)+' Dividir este pago en varias líneas…</button>':'')+
+    auditLineHTML();
   root.innerHTML=sheetShell("closeSheet",inner);
   if(prevSheet){ var wr=root.querySelector(".sheetwrap"); if(wr) wr.classList.add("rerender");
     if(prevScroll>0){ var ns=root.querySelector(".sheet"); if(ns) ns.scrollTop=prevScroll; } }
@@ -3581,6 +3691,77 @@ function duplicateEntry(){ if(!draft) return; if(!draftId){ toast("Guarda primer
   renderSheet("Registro"); toast("Copia con fecha de HOY — cámbiala si era otra",true); }
 function deleteEntry(){ if(!draftId) return; if(!confirm("¿Borrar este registro?")) return; var e=DB.entries[draftId]; if(e){ e.deleted=true; e.updatedAt=Date.now(); } save(); closeSheet(); render(); toast("Borrado"); }
 
+/* ---- split de un pago en varias líneas ---- */
+var splitS=null;
+function openSplitFromDraft(){
+  if(!draft) return;
+  splitS={ total:Number(draft.amount)||0, account:draft.account||V.account, date:draft.date||E.todayISO(),
+    place:draft.place||"", lines:[
+      {amount:"",cat:null,scope:draft.scope==="shared"?"shared":"personal",details:""},
+      {amount:"",cat:null,scope:"personal",details:""} ] };
+  closeSheet();
+  renderSplit();
+}
+function splitAssigned(){ return (splitS.lines||[]).reduce(function(s,l){ return s+(parseFloat(l.amount)||0); },0); }
+function renderSplit(){
+  if(!splitS) return;
+  var asg=splitAssigned(), left=Math.round((splitS.total-asg)*100)/100;
+  var rows=splitS.lines.map(function(l,i){
+    var cats=(l.scope==="shared"?E.SHARED_CATS.filter(function(c){return c!=="Efectivo"&&c!=="Corte";}):E.catList().filter(function(c){var CM=E.catsMap();return CM[c]&&CM[c].kind==="out";}));
+    var opts='<option value="">Categoría…</option>'+cats.map(function(c){return '<option '+(l.cat===c?"selected":"")+' value="'+esc(c)+'">'+esc(c)+'</option>';}).join("");
+    return '<div class="spline">'+
+      '<div class="sprow1">'+
+        '<input class="spamt" inputmode="decimal" placeholder="0" value="'+esc(l.amount)+'" oninput="spSet('+i+',\'amount\',this.value)">'+
+        '<select class="spcat" onchange="spSet('+i+',\'cat\',this.value)">'+opts+'</select>'+
+        '<button class="spscope'+(l.scope==="shared"?" on":"")+'" title="Personal / Ratones" onclick="spScope('+i+')">'+ico("mouse",14)+'</button>'+
+        (splitS.lines.length>2?('<button class="sprm" onclick="spRm('+i+')">'+ico("close",14)+'</button>'):'')+
+      '</div>'+
+      '<input class="spdet" placeholder="Detalle (opcional)" value="'+esc(l.details)+'" oninput="spSet('+i+',\'details\',this.value)">'+
+    '</div>';
+  }).join("");
+  var okLeft=Math.abs(left)<0.01;
+  var inner='<h2>Dividir pago</h2>'+
+    '<p style="font-size:13px;color:var(--dim);margin:0 0 10px">'+esc(money(splitS.total))+' · '+esc(splitS.account)+(splitS.place?(' · '+esc(splitS.place)):'')+' · '+esc(fmtShort(splitS.date))+'</p>'+
+    rows+
+    '<button class="btn ghost mini" style="margin-top:4px" onclick="spAdd()">+ Agregar línea</button>'+
+    '<div class="spleft'+(okLeft?" ok":(left<0?" neg":""))+'" id="spLeft">'+
+      (okLeft?'Todo asignado ✔':(left>0?('Faltan '+esc(money(left))):('Te pasaste por '+esc(money(-left)))))+'</div>'+
+    '<div class="sheetbtns"><button class="btn ghost" onclick="closeSplit()">Cancelar</button>'+
+    '<button class="btn primary" '+(okLeft?"":"disabled style=\'opacity:.45\'")+' onclick="saveSplit()">Guardar '+splitS.lines.length+' movimientos</button></div>';
+  document.getElementById("sheetroot").innerHTML=sheetShell("closeSplit",inner);
+}
+function spSet(i,k,v){ if(!splitS||!splitS.lines[i]) return; splitS.lines[i][k]=v;
+  if(k==="amount"){ /* refresco vivo del contador sin re-render (no pierde foco) */
+    var asg=splitAssigned(), left=Math.round((splitS.total-asg)*100)/100, el=document.getElementById("spLeft");
+    if(el){ el.className="spleft"+(Math.abs(left)<0.01?" ok":(left<0?" neg":""));
+      el.textContent=Math.abs(left)<0.01?"Todo asignado ✔":(left>0?("Faltan "+money(left)):("Te pasaste por "+money(-left))); }
+    var btn=document.querySelector(".sheetbtns .btn.primary");
+    if(btn){ if(Math.abs(left)<0.01){btn.removeAttribute("disabled");btn.style.opacity="";} else {btn.setAttribute("disabled","");btn.style.opacity=".45";} }
+  }
+}
+function spScope(i){ if(!splitS||!splitS.lines[i]) return; var l=splitS.lines[i]; l.scope=(l.scope==="shared")?"personal":"shared"; l.cat=null; renderSplit(); }
+function spAdd(){ splitS.lines.push({amount:"",cat:null,scope:"personal",details:""}); renderSplit(); }
+function spRm(i){ splitS.lines.splice(i,1); renderSplit(); }
+function closeSplit(){ dismissSheet(); splitS=null; }
+function saveSplit(){
+  if(!splitS) return;
+  var left=Math.round((splitS.total-splitAssigned())*100)/100;
+  if(Math.abs(left)>=0.01){ toast(left>0?("Faltan "+money(left)):"Revisa los montos"); return; }
+  var bad=splitS.lines.find(function(l){ return (parseFloat(l.amount)||0)>0 && !l.cat; });
+  if(bad){ toast("Elige categoría en cada línea"); return; }
+  var n=0;
+  splitS.lines.forEach(function(l){
+    var a=parseFloat(l.amount)||0; if(a<=0) return;
+    if(l.scope==="shared"){
+      commitTxn({date:splitS.date,amount:a,type:"Egreso",category:l.cat,account:splitS.account,place:splitS.place,details:l.details||"",tags:"",expenseType:"",msi:1,scope:"shared",paidBy:prof(),splitP1:defaultSplit()});
+    } else {
+      commitTxn({date:splitS.date,amount:a,type:"Egreso",category:l.cat,account:splitS.account,place:splitS.place,details:l.details||"",tags:"",expenseType:etFor(l.cat,"Egreso"),msi:1,scope:"personal"});
+    }
+    n++;
+  });
+  closeSplit(); V.amt=""; render(); buzz(12);
+  toast(n+" movimientos guardados ✔",true);
+}
 /* ---- multi ---- */
 var multi=[];
 function openMulti(drafts){
