@@ -753,15 +753,18 @@ var CUR_ALIASES = ACCT_ALIASES;
    y agrega un alias automático por nombre. */
 function configureAccounts(list){
   if(!list || !list.length) return;
-  ACCOUNTS = list.map(function(a){ return {name:a.name, tdc:!!a.tdc}; });
+  ACCOUNTS = list.map(function(a){ return {name:a.name, tdc:!!a.tdc, archived:!!a.archived, orig:a.orig||null}; });
   ACCT_NAMES = ACCOUNTS.map(function(a){ return a.name; });
+  /* isTDC debe seguir funcionando para archivadas (export/MSI del histórico) */
   TDC_SET = {}; ACCOUNTS.forEach(function(a){ if(a.tdc) TDC_SET[a.name]=1; });
-  var present={}; ACCT_NAMES.forEach(function(n){ present[n]=1; });
-  var al = ACCT_ALIASES.filter(function(x){ return present[x[1]]; });
-  ACCOUNTS.forEach(function(a){ var k=normAlnum(a.name); if(k && !al.some(function(x){return x[0]===k;})) al.push([k,a.name]); });
+  /* alias solo para cuentas ACTIVAS; las renombradas conservan sus alias curados vía orig */
+  var target={};
+  ACCOUNTS.forEach(function(a){ if(a.archived) return; target[a.name]=a.name; if(a.orig) target[a.orig]=a.name; });
+  var al = ACCT_ALIASES.filter(function(x){ return target[x[1]]; }).map(function(x){ return [x[0], target[x[1]]]; });
+  ACCOUNTS.forEach(function(a){ if(a.archived) return; var k=normAlnum(a.name); if(k && !al.some(function(x){return x[0]===k;})) al.push([k,a.name]); });
   CUR_ALIASES = al;
 }
-function accounts(){ return ACCOUNTS.map(function(a){return {name:a.name,tdc:a.tdc};}); }
+function accounts(){ return ACCOUNTS.map(function(a){return {name:a.name,tdc:a.tdc,archived:!!a.archived,orig:a.orig||null};}); }
 
 /* Reconfigura categorías desde la app.
    catsObj = { nombreActual: {kind, et, orig} }  (orig = nombre base, o null si es propia) */
@@ -2115,7 +2118,7 @@ function viewReg(){
   var crowRight = isX? '' : acctPill("Cuenta",V.account,"pickAccount()");
   var xfInCard = isX? ('<div class="xfrow">'+acctPill("Desde",V.xferFrom,"pickXfer(\'from\')")+'<div class="ar">'+ico("chevR",18)+'</div>'+acctPill("Hasta",V.xferTo,"pickXfer(\'to\')")+'</div>') : '';
 
-  return header()+
+  return header()+tripBannerHTML()+
     '<div class="regpage">'+pendingBannerHTML()+
       '<div class="herocard">'+
         '<div class="crow"><div class="modes">'+seg+'</div>'+crowRight+'</div>'+
@@ -2214,7 +2217,7 @@ function quickSave(){
   }
   var type=(V.mode==="Ingreso")?"Ingreso":"Egreso";
   if(!V.cat){ openSheetFromPad(); return; }
-  commitTxn({date:E.todayISO(),amount:amt,type:type,category:V.cat,account:V.account,place:"",details:"",tags:"",expenseType:etFor(V.cat,type),msi:1});
+  commitTxn({date:E.todayISO(),amount:amt,type:type,category:V.cat,account:V.account,place:"",details:"",tags:tripTag(""),expenseType:etFor(V.cat,type),msi:1});
   rememberAccount(); V.amt=""; V.cat=null; render(); toast(money(amt)+" · "+V.cat,true);
 }
 function rememberAccount(){ DB.settings.lastAccount=V.account; }
@@ -2270,11 +2273,162 @@ function viewSaldo(){
     '<div class="twocol"><div class="card"><div class="k">Entró (mes)</div><div class="val in">'+esc(money(t.inn))+'</div></div>'+
     '<div class="card"><div class="k">Salió (mes)</div><div class="val out">'+esc(money(t.out))+'</div></div></div>'+
     '<div class="sechead"><h3>Últimos movimientos</h3></div>'+ recentList(12);
-  var side=ratMiniCard()+
+  var side=ratMiniCard()+msiMiniCard()+
     '<button class="btn ghost" onclick="reconcile()">Cuadrar efectivo con lo que traigo</button>'+
     '<div style="height:10px"></div>'+
     '<button class="btn ghost" onclick="editStart()">Saldo inicial ('+esc(money(DB.settings.startingBalance))+')</button>';
   return header()+pendingBannerHTML()+syncWarnHTML()+ deskGrid(main,side);
+}
+/* ---- MSI activos ---- */
+function monthDiff(a,b){ return (+b.slice(0,4)-(+a.slice(0,4)))*12 + (+b.slice(5,7)-(+a.slice(5,7))); }
+function msiActiveList(refMonth){
+  refMonth=refMonth||curMonth();
+  var out=[];
+  E.activeEntries(DB.entries).forEach(function(e){
+    if(e.kind!=="txn"||e.type!=="Egreso"||!(e.msi>1)||!E.isTDC(e.account)||e.mirror) return;
+    var start=e.date.slice(0,7), k=monthDiff(start,refMonth)+1;
+    if(k<1||k>e.msi) return;
+    var monthly=e.amount/e.msi;
+    out.push({id:e.id,label:(e.details||e.place||e.category||"Compra"),account:e.account,total:e.amount,
+      msi:e.msi,k:k,left:e.msi-k,monthly:monthly,remaining:Math.max(0,e.amount-monthly*k),endMonth:addMonths(start,e.msi-1)});
+  });
+  out.sort(function(a,b){ return b.monthly-a.monthly; });
+  return out;
+}
+function msiFutureMonths(n){
+  var base=curMonth(), rows=[];
+  for(var i=1;i<=n;i++){ var m=addMonths(base,i), tot=0, cnt=0;
+    msiActiveList(m).forEach(function(x){ tot+=x.monthly; cnt++; });
+    if(cnt) rows.push({month:m,total:tot,count:cnt});
+  }
+  return rows;
+}
+function msiMiniCard(){
+  var list=msiActiveList(); if(!list.length) return "";
+  var tot=list.reduce(function(s,x){return s+x.monthly;},0);
+  return '<div class="card ratmini" onclick="openMSISheet()">'+
+    '<div class="ic" style="color:var(--acc)">'+ico("saldo",20)+'</div>'+
+    '<div class="mid"><div class="t">MSI activos</div><div class="s">'+list.length+' compras a meses</div></div>'+
+    '<div class="amt out">'+esc(money(tot).replace("$",""))+'/mes</div></div>';
+}
+function openMSISheet(){
+  var list=msiActiveList(), tot=list.reduce(function(s,x){return s+x.monthly;},0), rem=list.reduce(function(s,x){return s+x.remaining;},0);
+  var mm=function(m){ return cap(E.fromISO(m+"-01").toLocaleDateString("es-MX",{month:"short",year:"2-digit"})); };
+  var inner='<h2>MSI activos</h2>'+
+    '<div class="twocol" style="margin-bottom:12px"><div class="card"><div class="k">Compromiso este mes</div><div class="val out">'+esc(money(tot))+'</div></div>'+
+    '<div class="card"><div class="k">Por pagar (restante)</div><div class="val">'+esc(money(rem))+'</div></div></div>';
+  if(!list.length) inner+='<div class="empty"><div class="big">Sin MSI activos</div>Las compras a meses con tus TDC aparecerán aquí solitas.</div>';
+  else{
+    inner+=list.map(function(x){
+      var pct=Math.round(100*x.k/x.msi);
+      return '<div class="card" style="margin-bottom:8px" onclick="closeSheet();openEdit(\''+jsq(x.id)+'\')">'+
+        '<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline"><b>'+esc(x.label)+'</b><span style="white-space:nowrap">'+esc(money(x.monthly))+'/mes</span></div>'+
+        '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--faint);margin-top:2px">'+
+          '<span><span class="cdot" style="background:'+esc(colorFor(x.account))+';display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px"></span>'+esc(x.account)+' · '+x.k+'/'+x.msi+'</span>'+
+          '<span>faltan '+esc(money(x.remaining))+' · termina '+esc(mm(x.endMonth))+'</span></div>'+
+        '<div style="height:5px;border-radius:4px;background:var(--line);margin-top:8px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:var(--acc)"></div></div></div>';
+    }).join("");
+    var fut=msiFutureMonths(24);
+    if(fut.length){
+      inner+='<div class="sechead" style="margin-top:14px"><h3>Compromiso de los próximos meses</h3></div>';
+      var mx=fut.reduce(function(s,r){return Math.max(s,r.total);},0)||1;
+      inner+=fut.map(function(r){
+        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12.5px">'+
+          '<span style="width:64px;color:var(--faint)">'+esc(mm(r.month))+'</span>'+
+          '<div style="flex:1;height:8px;border-radius:5px;background:var(--line);overflow:hidden"><div style="height:100%;width:'+Math.round(100*r.total/mx)+'%;background:var(--acc)"></div></div>'+
+          '<span style="width:88px;text-align:right">'+esc(money(r.total))+'</span></div>';
+      }).join("");
+    }
+  }
+  document.getElementById("sheetroot").innerHTML=sheetShell("dismissSheet",inner);
+}
+/* ============ MODO VIAJE ============ */
+function trip(){ return DB.settings.trip||null; }
+function tripTag(tags){
+  var t=trip(); if(!t||!t.name) return tags;
+  tags=(tags||"").trim();
+  var has=tags.split(",").some(function(x){return x.trim().toLowerCase()===t.name.toLowerCase();});
+  return has?tags:(tags?tags+", "+t.name:t.name);
+}
+function tripEntries(name){
+  var n=String(name||"").toLowerCase();
+  return E.activeEntries(DB.entries).filter(function(e){
+    return e.kind==="txn"&&!e.mirror&&(e.tags||"").toLowerCase().split(",").some(function(x){return x.trim()===n;});
+  });
+}
+function tripShare(e){ if(e.scope!=="shared") return e.amount; var sp=(typeof e.splitP1==="number")?e.splitP1:defaultSplit(); return e.amount*((prof()==="p1")?sp:(100-sp))/100; }
+function tripSpent(name){
+  var s=0; tripEntries(name).forEach(function(e){ if(e.type!=="Egreso") return; s+=tripShare(e); });
+  return Math.round(s*100)/100;
+}
+function startTrip(){
+  var nm=((document.getElementById("trName")||{}).value||"").trim();
+  if(!nm){ toast("Ponle nombre al viaje"); return; }
+  var bg=parseFloat(String((document.getElementById("trBudget")||{}).value||"").replace(/[^0-9.]/g,""))||0;
+  var fx=parseFloat(String((document.getElementById("trFx")||{}).value||"").replace(/[^0-9.]/g,""))||0;
+  DB.settings.trip={name:nm,budget:bg,fx:fx,since:E.todayISO()};
+  save(); render(); toast("Modo viaje: "+nm+" ✈️",true);
+}
+function endTrip(){
+  var t=trip(); if(!t) return;
+  if(!confirm("¿Terminar «"+t.name+"»? Los registros conservan su etiqueta; puedes ver el resumen cuando quieras.")) return;
+  var nm=t.name; DB.settings.trip=null; save(); render();
+  openTripSheet(nm); toast("Viaje cerrado ✔",true);
+}
+function tripFxChipHTML(){
+  var t=trip();
+  if(!t||!(t.fx>0)||!draft||draft.kind!=="txn") return "";
+  return '<div style="text-align:center;margin:-2px 0 8px"><button class="chip" onclick="tripFxApply()">moneda del viaje ×'+esc(t.fx)+' → MXN</button></div>';
+}
+function tripFxApply(){ var t=trip(); if(!t||!draft) return; draft.amount=Math.round((draft.amount||0)*t.fx*100)/100; renderSheet(draftId?"Editar":"Registro"); }
+function tripBannerHTML(){
+  var t=trip(); if(!t) return "";
+  var sp=tripSpent(t.name);
+  var txt=money(sp)+(t.budget>0?(" de "+money(t.budget)):" gastados");
+  var pct=t.budget>0?Math.min(100,Math.round(100*sp/t.budget)):0;
+  return '<div class="card ratmini" onclick="openTripSheet()" style="margin-bottom:12px">'+
+    '<div class="ic" style="color:var(--acc)">✈️</div>'+
+    '<div class="mid"><div class="t">Viaje: '+esc(t.name)+'</div><div class="s">'+esc(txt)+(t.budget>0?'<div style="height:4px;border-radius:3px;background:var(--line);margin-top:5px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(pct>=100?"var(--bad,#e66)":"var(--acc)")+'"></div></div>':'')+'</div></div></div>';
+}
+function openTripSheet(name){
+  var t=trip(), nm=name||(t&&t.name); if(!nm) return;
+  var arr=tripEntries(nm), sp=tripSpent(nm);
+  var byCat={},byDay={},sh=0;
+  arr.forEach(function(e){ if(e.type!=="Egreso") return;
+    var mine=tripShare(e);
+    if(e.scope==="shared") sh+=mine;
+    byCat[e.category]=(byCat[e.category]||0)+mine;
+    byDay[e.date]=(byDay[e.date]||0)+mine; });
+  var days=Object.keys(byDay).length||1;
+  var cats=Object.keys(byCat).map(function(c){return [c,byCat[c]];}).sort(function(a,b){return b[1]-a[1];});
+  var mx=cats.length?cats[0][1]:1;
+  var inner='<h2>✈️ '+esc(nm)+'</h2>'+
+    '<div class="twocol" style="margin-bottom:12px"><div class="card"><div class="k">Total (tu parte)</div><div class="val out">'+esc(money(sp))+'</div></div>'+
+    '<div class="card"><div class="k">Promedio / día ('+days+')</div><div class="val">'+esc(money(sp/days))+'</div></div></div>'+
+    ((t&&t.name===nm&&t.budget>0)?'<div class="card" style="margin-bottom:12px"><div class="k">Presupuesto</div><div class="val">'+esc(money(sp))+' de '+esc(money(t.budget))+' ('+Math.round(100*sp/t.budget)+'%)</div></div>':'')+
+    (sh>0?'<div class="card" style="margin-bottom:12px"><div class="k">'+ico("mouse",13)+' En gastos Ratones (tu parte)</div><div class="val">'+esc(money(sh))+'</div></div>':'');
+  if(!arr.length) inner+='<div class="empty"><div class="big">Sin registros aún</div>Todo lo que guardes con el viaje activo se etiqueta solo.</div>';
+  else{
+    inner+='<div class="sechead"><h3>Por categoría</h3></div>'+cats.map(function(c){
+      return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12.5px">'+
+        '<span style="width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c[0])+'</span>'+
+        '<div style="flex:1;height:8px;border-radius:5px;background:var(--line);overflow:hidden"><div style="height:100%;width:'+Math.round(100*c[1]/mx)+'%;background:var(--acc)"></div></div>'+
+        '<span style="width:86px;text-align:right">'+esc(money(c[1]))+'</span></div>';
+    }).join("");
+    inner+='<div class="sechead" style="margin-top:12px"><h3>Movimientos ('+arr.length+')</h3></div>'+arr.sort(sortDesc).slice(0,40).map(entryRow).join("");
+  }
+  if(t&&t.name===nm) inner+='<div style="height:12px"></div><button class="btn ghost" onclick="dismissSheet();endTrip()">Terminar viaje</button>';
+  document.getElementById("sheetroot").innerHTML=sheetShell("dismissSheet",inner);
+}
+function tripBlock(){
+  var t=trip();
+  if(!t) return '<div class="sblk"><h3>✈️ Modo viaje</h3><p>Al activarlo, <b style="color:var(--bone)">todo lo que registres se etiqueta solo</b> con el nombre del viaje (aunque lo captures ya de vuelta en casa, con fechas de esos días). Presupuesto y tipo de cambio son opcionales.</p>'+
+    '<div class="field"><div class="fl">Nombre del viaje</div><input id="trName" placeholder="Europa 2026"></div>'+
+    '<div class="rangerow"><div class="field"><div class="fl">Presupuesto (opcional)</div><input id="trBudget" inputmode="decimal" placeholder="0"></div>'+
+    '<div class="field"><div class="fl">Tipo de cambio (efectivo)</div><input id="trFx" inputmode="decimal" placeholder="ej. 19.8"></div></div>'+
+    '<button class="btn ghost mini" onclick="startTrip()">Iniciar viaje</button></div>';
+  return '<div class="sblk"><h3>✈️ Modo viaje: '+esc(t.name)+'</h3><p>Activo desde '+esc(t.since)+'. '+(t.fx>0?('Tipo de cambio ×'+t.fx+' disponible en la tarjeta de registro. '):'')+'Llevas <b style="color:var(--bone)">'+esc(money(tripSpent(t.name)))+'</b>'+(t.budget>0?(' de '+esc(money(t.budget))):'')+'.</p>'+
+    '<div style="display:flex;gap:10px"><button class="btn ghost mini" style="flex:1" onclick="openTripSheet()">Resumen del viaje</button><button class="btn ghost mini" style="flex:1" onclick="endTrip()">Terminar viaje</button></div></div>';
 }
 function ratMiniCard(){
   if(!E.activeEntries(DB.entries).some(function(e){return e.scope==="shared";})) return "";
@@ -3148,8 +3302,10 @@ function viewSettings(){
       '<div class="field"><div class="fl">Hora</div><input id="remTime" type="time" value="'+esc(DB.settings.reminderTime)+'"></div>'+
       '<div style="display:flex;gap:10px"><button class="btn ghost mini" style="flex:1" onclick="saveRem()">Guardar hora</button><button class="btn ghost mini" style="flex:1" onclick="testNotif()">Probar aviso</button></div>'+
       '<details class="foldable" style="margin-top:12px"><summary>Cómo crear el Atajo</summary><p style="margin-top:8px">Atajos → Automatización → Crear → Hora del día → tu hora + Diariamente → acción Abrir app → Cashy.</p></details></div>'+
+    tripBlock()+
     accountsBlock()+
     recurringBlock()+
+    recPackBlock()+
     categoriesBlock()+
     catETBlock()+
     customRulesBlock()+
@@ -3189,17 +3345,32 @@ function forget(k){ k=unq(k); delete DB.learn.places[k]; save(); render(); }
 
 /* ---- administrar cuentas ---- */
 function accountsBlock(){
-  var rows=DB.settings.accounts.map(function(a,i){
-    var col=colorFor(a.name);
-    return '<div class="catrow"><div class="cn"><label class="cpick" style="background:'+esc(col)+'"><input type="color" value="'+esc(col)+'" onchange="setAcctColor('+i+',this.value)"></label>'+esc(a.name)+'</div><div class="tg">'+
-      '<button class="'+(a.tdc?"on":"")+'" onclick="toggleAcctTDC('+i+')">TDC</button>'+
-      '<button onclick="renameAcct('+i+')">Renombrar</button>'+
-      '<button onclick="removeAcct('+i+')">Quitar</button></div></div>';
-  }).join("");
-  return '<div class="sblk"><h3>Cuentas y tarjetas</h3><p>Toca el círculo para cambiar el color de cada cuenta (colorea el tema de la app y sus movimientos). «TDC» = tarjeta de crédito (pestaña aparte al exportar).</p>'+rows+
+  function row(a,i){
+    var col=colorFor(a.name), arch=!!a.archived;
+    return '<div class="catrow"'+(arch?' style="opacity:.55"':'')+'><div class="cn"><label class="cpick" style="background:'+esc(col)+'"><input type="color" value="'+esc(col)+'" onchange="setAcctColor('+i+',this.value)"></label>'+esc(a.name)+'</div><div class="tg">'+
+      (arch
+        ? '<button onclick="unarchiveAcct('+i+')">Restaurar</button>'+(accountUsed(a.name)?'':'<button onclick="removeAcct('+i+')">Quitar</button>')
+        : '<button class="'+(a.tdc?"on":"")+'" onclick="toggleAcctTDC('+i+')">TDC</button>'+
+          '<button onclick="renameAcct('+i+')">Renombrar</button>'+
+          (accountUsed(a.name)?'<button onclick="archiveAcct('+i+')">Archivar</button>':'<button onclick="removeAcct('+i+')">Quitar</button>'))+
+      '</div></div>';
+  }
+  var act=[],arc=[];
+  DB.settings.accounts.forEach(function(a,i){ (a.archived?arc:act).push(row(a,i)); });
+  return '<div class="sblk"><h3>Cuentas y tarjetas</h3><p>Toca el círculo para cambiar el color. «TDC» = tarjeta de crédito (pestaña aparte al exportar). <b style="color:var(--bone)">Archivar</b> esconde una cuenta cancelada de los selectores y del dictado, pero conserva todo su histórico intacto.</p>'+act.join("")+
+    (arc.length?'<div style="font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;font-weight:700;margin:12px 2px 6px">Archivadas</div>'+arc.join(""):'')+
     '<div class="field" style="margin-top:10px"><input id="acNew" placeholder="Nombre de cuenta/tarjeta"></div>'+
     '<div style="display:flex;gap:10px"><button class="btn ghost mini" style="flex:1" onclick="addAcct(false)">+ Débito / otra</button><button class="btn ghost mini" style="flex:1" onclick="addAcct(true)">+ TDC</button></div></div>';
 }
+function archiveAcct(i){ var a=DB.settings.accounts[i]; if(!a) return;
+  if(!confirm("¿Archivar «"+a.name+"»? Dejará de aparecer para nuevos registros; su histórico no se toca.")) return;
+  a.archived=true;
+  var f=DB.settings.favAccounts, fi=f.indexOf(a.name); if(fi>=0) f.splice(fi,1);
+  if(V.account===a.name) V.account="Cash"; if(DB.settings.lastAccount===a.name) DB.settings.lastAccount="Cash";
+  if(V.xferFrom===a.name) V.xferFrom="Cash"; if(V.xferTo===a.name) V.xferTo="Cash";
+  applyConfig(); save(); render(); toast("Archivada — histórico intacto",true);
+}
+function unarchiveAcct(i){ var a=DB.settings.accounts[i]; if(!a) return; a.archived=false; applyConfig(); save(); render(); toast("Restaurada",true); }
 function setAcctColor(i,hex){ var a=DB.settings.accounts[i]; if(!a) return; DB.settings.accountColors[a.name]=hex; save(); render(); toast("Color actualizado",true); }
 function accountUsed(name){ return E.activeEntries(DB.entries).some(function(e){ return e.account===name||e.fromAccount===name||e.toAccount===name; }); }
 function migrateAccountName(oldN,newN){
@@ -3208,11 +3379,17 @@ function migrateAccountName(oldN,newN){
   var f=DB.settings.favAccounts, fi=f.indexOf(oldN); if(fi>=0) f[fi]=newN;
   if(DB.settings.lastAccount===oldN) DB.settings.lastAccount=newN;
   if(V.account===oldN) V.account=newN; if(V.xferFrom===oldN) V.xferFrom=newN; if(V.xferTo===oldN) V.xferTo=newN;
+  /* el color personalizado sigue a la cuenta */
+  var c=DB.settings.accountColors||{};
+  if(c[oldN]!=null && c[newN]==null){ c[newN]=c[oldN]; delete c[oldN]; }
+  /* plantillas recurrentes apuntan al nombre nuevo */
+  (DB.settings.recurring||[]).forEach(function(r){ var t=r&&r.template; if(!t) return;
+    if(t.account===oldN) t.account=newN; if(t.fromAccount===oldN) t.fromAccount=newN; if(t.toAccount===oldN) t.toAccount=newN; });
 }
 function addAcct(tdc){ var nm=((document.getElementById("acNew")||{}).value||"").trim(); if(!nm){toast("Escribe el nombre");return;} if(DB.settings.accounts.some(function(a){return a.name===nm;})){toast("Ya existe");return;} DB.settings.accounts.push({name:nm,tdc:!!tdc}); applyConfig(); save(); render(); toast("Cuenta agregada",true); }
 function toggleAcctTDC(i){ DB.settings.accounts[i].tdc=!DB.settings.accounts[i].tdc; applyConfig(); save(); render(); }
-function renameAcct(i){ var a=DB.settings.accounts[i]; if(!a) return; var nn=prompt("Nuevo nombre para «"+a.name+"»:",a.name); if(nn==null) return; nn=nn.trim(); if(!nn||nn===a.name) return; if(DB.settings.accounts.some(function(x){return x.name===nn;})){toast("Ya existe");return;} var old=a.name; a.name=nn; migrateAccountName(old,nn); applyConfig(); save(); render(); toast("Renombrada",true); }
-function removeAcct(i){ var a=DB.settings.accounts[i]; if(!a) return; if(accountUsed(a.name)){ toast("Está en uso; no se puede quitar"); return; } if(!confirm("¿Quitar «"+a.name+"»?")) return; DB.settings.accounts.splice(i,1); var f=DB.settings.favAccounts, fi=f.indexOf(a.name); if(fi>=0) f.splice(fi,1); if(V.account===a.name) V.account="Cash"; applyConfig(); save(); render(); }
+function renameAcct(i){ var a=DB.settings.accounts[i]; if(!a) return; var nn=prompt("Nuevo nombre para «"+a.name+"»:",a.name); if(nn==null) return; nn=nn.trim(); if(!nn||nn===a.name) return; if(DB.settings.accounts.some(function(x){return x.name===nn;})){toast("Ya existe");return;} var old=a.name; a.orig=a.orig||old; a.name=nn; migrateAccountName(old,nn); applyConfig(); save(); render(); toast("Renombrada — histórico migrado",true); }
+function removeAcct(i){ var a=DB.settings.accounts[i]; if(!a) return; if(accountUsed(a.name)){ toast("Tiene historial: usa «Archivar» para esconderla sin perder nada"); return; } if(!confirm("¿Quitar «"+a.name+"»?")) return; DB.settings.accounts.splice(i,1); var f=DB.settings.favAccounts, fi=f.indexOf(a.name); if(fi>=0) f.splice(fi,1); if(V.account===a.name) V.account="Cash"; applyConfig(); save(); render(); }
 
 /* ---- administrar categorías ---- */
 function categoriesBlock(){
@@ -3234,6 +3411,39 @@ function categoriesBlock(){
     '<p style="font-size:12.5px"><b>Paquete Excel de Dany</b> — carga tus categorías y ~70 palabras clave (uber eats→Delivery, croquetas→Familia/Mascotas, jordan→Zapatos…) para que el dictado las reconozca desde el día uno.</p>'+
     '<button class="btn ghost mini" onclick="importDanyPack()">Cargar categorías y diccionario</button></div>';
 }
+/* recurrentes detectados en el historial: se crean pausados para que los revises */
+var REC_PACK=[
+  {label:"Renta",           freq:"m", cat:"Renta",        amt:9000, place:"Sra Lucy",             shared:true,  et:"Vital"},
+  {label:"Mantenimiento",   freq:"m", cat:"Renta",        amt:450,  place:"Condominio Góndolas",  shared:true,  et:"Vital"},
+  {label:"Internet",        freq:"m", cat:"Internet",     amt:680,  place:"Totalplay",            shared:true,  et:"Vital"},
+  {label:"Luz",             freq:"m", cat:"Electricidad", amt:320,  place:"CFE",                  shared:true,  et:"Vital"},
+  {label:"Plan celular",    freq:"m", cat:"Teléfono",     amt:350,  place:"AT&T",                 shared:false, et:"Vital"},
+  {label:"iCloud",          freq:"m", cat:"Suscripciones",amt:179,  place:"Apple",                shared:false, et:"Vital"},
+  {label:"Seguro del coche",freq:"m", cat:"Seguro Auto",  amt:992,  place:"GNP",                  shared:false, et:"Vital"},
+  {label:"ISR (SAT)",       freq:"m", cat:"Impuestos",    amt:400,  place:"SAT",                  shared:false, et:"Vital"}
+];
+function recPackBlock(){
+  var have={}; (DB.settings.recurring||[]).forEach(function(r){ if(r.template) have[r.template.place||""]=1; });
+  var rows=REC_PACK.map(function(p,i){
+    var on=!!have[p.place];
+    return '<div class="catrow"><div class="cn">'+esc(p.label)+' <span style="color:var(--faint);font-size:11px">'+esc(money(p.amt))+' · mensual'+(p.shared?" · Ratones":"")+'</span></div>'+
+      '<div class="tg"><button class="'+(on?"on":"")+'" onclick="addRecFromPack('+i+')">'+(on?"Ya está":"Agregar")+'</button></div></div>';
+  }).join("");
+  return '<div class="sblk"><h3>Fijos mensuales sugeridos</h3><p>Detectados en tu historial. Se crean <b>pausados</b>: actívalos y ajusta el monto cuando quieras.</p>'+rows+
+    '<button class="btn ghost mini" style="margin-top:10px" onclick="addAllRecPack()">Agregar todos</button></div>';
+}
+function addRecFromPack(i,quiet){
+  var p=REC_PACK[i]; if(!p) return;
+  DB.settings.recurring=DB.settings.recurring||[];
+  if((DB.settings.recurring||[]).some(function(r){return r.template&&r.template.place===p.place;})){ if(!quiet) toast("Ya lo tienes"); return; }
+  if(!DB.settings.cats[p.cat]) DB.settings.cats[p.cat]={kind:"out",et:p.et,orig:null};
+  var t=E.todayISO();
+  DB.settings.recurring.push({id:uid(),freq:p.freq,active:false,next:advanceISO(t,p.freq),
+    template:{type:"Egreso",category:p.cat,account:"Cash",amount:p.amt,place:p.place,details:p.label,tags:"",
+      expenseType:p.shared?"":p.et,msi:1,scope:p.shared?"shared":"personal",paidBy:p.shared?prof():undefined,splitP1:p.shared?defaultSplit():undefined}});
+  applyConfig(); save(); if(!quiet){ render(); toast(p.label+" agregado (pausado) ✔",true); }
+}
+function addAllRecPack(){ REC_PACK.forEach(function(p,i){ addRecFromPack(i,true); }); render(); toast("Fijos mensuales agregados (pausados) ✔",true); }
 function mergeCats(){
   var from=(document.getElementById("mgFrom")||{}).value, to=(document.getElementById("mgTo")||{}).value;
   if(!from||!to||from===to){ toast("Elige dos categorías distintas"); return; }
@@ -3259,7 +3469,9 @@ var DANY_PACK={
     ["Cafetería Trabajo","Vital"],["Familia/Mascotas","Vital"],["Gadgets","Extraordinario"],["Zapatos","Extraordinario"],
     ["Ropa","Extraordinario"],["Uber","Extraordinario"],["Apuestas","Extraordinario"],["Consultas/Estudios","Vital"],
     ["Medicina","Vital"],["Productos/equipo","Extraordinario"],["Donaciones","Extraordinario"],["Salidas","Extraordinario"],
-    ["Suscripciones","Vital"],["Estacionamiento","Extraordinario"],["Regalos","Extraordinario"]],
+    ["Suscripciones","Vital"],["Estacionamiento","Extraordinario"],["Regalos","Extraordinario"],
+    ["Alojamiento","Extraordinario"],["Transporte","Extraordinario"],["Actividades","Extraordinario"],
+    ["Seguro Auto","Vital"],["Educación","Vital"],["Colección","Extraordinario"]],
   rules:[["uber eats","Delivery"],["rappi","Delivery"],["tortas","Delivery"],
     ["cfe","Electricidad"],["luz","Electricidad"],
     ["pemex","Gasolina"],
@@ -3286,7 +3498,67 @@ var DANY_PACK={
     ["limosna","Donaciones"],["templo","Donaciones"],["donacion","Donaciones"],
     ["cine","Salidas"],["cinepolis","Salidas"],
     ["amazon prime","Suscripciones"],["icloud","Suscripciones"],["netflix","Suscripciones"],["spotify","Suscripciones"],["suscripcion","Suscripciones"],
-    ["mantenimiento condominio","Renta"]]
+    ["mantenimiento condominio","Renta"],
+    /* --- vendors reales del historial de Dany --- */
+    ["chedraui","Abarrotes"],["sams","Abarrotes"],["costco","Abarrotes"],["soriana","Abarrotes"],["walmart","Abarrotes"],
+    ["bodega aurrera","Abarrotes"],["cremeria","Abarrotes"],["polleria","Abarrotes"],["tortilleria","Abarrotes"],
+    ["purificadora","Abarrotes"],["garrafon","Abarrotes"],["minisuper","Abarrotes"],["fresko","Abarrotes"],
+    ["totalplay","Internet"],["att","Teléfono"],["at&t","Teléfono"],["plan celular","Teléfono"],
+    ["parco","Estacionamiento"],["kigo","Estacionamiento"],["parkimovil","Estacionamiento"],
+    ["dairy queen","Restaurante"],["carls jr","Restaurante"],["carl's jr","Restaurante"],["qin","Restaurante"],
+    ["mcdonalds","Restaurante"],["starbucks","Restaurante"],["italiannis","Restaurante"],["dolphy","Restaurante"],
+    ["krispy kreme","Restaurante"],["fresh salads","Restaurante"],["cheescake","Restaurante"],["blizzard","Restaurante"],
+    ["uber eats","Delivery"],["ubereats","Delivery"],["dominos","Delivery"],["domino's","Delivery"],["little caesar","Delivery"],
+    ["wingstop","Delivery"],["papa cabaña","Delivery"],["broken cheese","Delivery"],["cuarto de kilo","Delivery"],
+    ["ps store","Videojuegos"],["ps plus","Videojuegos"],["playstation","Videojuegos"],["nintendo","Videojuegos"],
+    ["switch","Videojuegos"],["eshop","Videojuegos"],["ea play","Videojuegos"],
+    ["innvictus","Zapatos"],["new balance","Zapatos"],["adidas","Zapatos"],["skechers","Zapatos"],["dportenis","Zapatos"],
+    ["zara","Ropa"],["bershka","Ropa"],["pull and bear","Ropa"],["pull & bear","Ropa"],["lefties","Ropa"],
+    ["american eagle","Ropa"],["h&m","Ropa"],["shein","Ropa"],["temu","Ropa"],["shopee","Ropa"],["tiktok shop","Ropa"],
+    ["macstore","Gadgets"],["ishop","Gadgets"],["apple watch","Gadgets"],["airpods","Gadgets"],["cargador","Gadgets"],
+    ["veterinario","Familia/Mascotas"],["veterinaria","Familia/Mascotas"],["frida","Familia/Mascotas"],["vlady","Familia/Mascotas"],
+    ["hospital veterinario","Familia/Mascotas"],
+    ["radial","Mecánico"],["autozone","Mecánico"],["kia","Mecánico"],["llantas","Mecánico"],["car wash","Mecánico"],
+    ["lavado de coche","Mecánico"],["afinacion","Mecánico"],["bateria","Mecánico"],
+    ["gnp","Seguro Auto"],["seguro coche","Seguro Auto"],
+    ["refrendo","Trámites/Comisiones/Servicios"],["verificacion","Trámites/Comisiones/Servicios"],["sofi","Trámites/Comisiones/Servicios"],
+    ["cinepolis","Salidas"],["ticketmaster","Salidas"],["boletos","Salidas"],["concierto","Salidas"],
+    ["despegar","Alojamiento"],["hotel","Alojamiento"],["riu","Alojamiento"],["airbnb","Alojamiento"],
+    ["aeromexico","Transporte"],["volaris","Transporte"],["vuelo","Transporte"],["vuelos","Transporte"],["trenitalia","Transporte"],
+    ["getyourguide","Actividades"],["tour","Actividades"],
+    ["chopo","Consultas/Estudios"],["otorrino","Consultas/Estudios"],["alergologo","Consultas/Estudios"],["dentista","Consultas/Estudios"],
+    ["farmacias del ahorro","Medicina"],["farmacia guadalajara","Medicina"],["similares","Medicina"],
+    ["condones","Productos/equipo"],["creatina","Productos/equipo"],["bloqueador","Productos/equipo"],["desodorante","Productos/equipo"],
+    ["album","Colección"],["sobres album","Colección"],
+    ["z gas","Gas"],["cfe","Electricidad"],["pemex","Gasolina"],["sra lucy","Renta"],["señora lucy","Renta"],
+    ["condominio","Renta"],["mantenimiento","Renta"],["sat","Impuestos"],["isr","Impuestos"],
+    ["uber one","Suscripciones"],["ps plus mes","Suscripciones"],["membresia","Suscripciones"],["membresía","Suscripciones"]]
+};
+var DANY_PACK2={
+  cats:[["Préstamos","neutral",""]],
+  rules:[
+    /* AR dividido: préstamos y reembolsables por dictado */
+    ["prestamo","Préstamos"],["prestamos","Préstamos"],["le preste","Préstamos"],["me pago el prestamo","Préstamos"],
+    ["reembolsable","Reembolsable"],["me lo van a devolver","Reembolsable"],["por bonificar","Reembolsable"],
+    /* casa y servicios */
+    ["z gas","Gas"],["zeta gas","Gas"],["gas lp","Gas"],["tanque de gas","Gas"],
+    ["sra lucy","Renta"],["señora lucy","Renta"],["condominio","Renta"],["gondolas","Renta"],
+    /* coche */
+    ["gasolinera","Gasolina"],["autolavado","Mecánico"],["lavado del coche","Mecánico"],["radial","Mecánico"],["llantas","Mecánico"],["afinacion","Mecánico"],["refrendo","Trámites/Comisiones/Servicios"],["verificacion","Trámites/Comisiones/Servicios"],
+    ["gnp","Seguro Auto"],["seguro del coche","Seguro Auto"],["seguro coche","Seguro Auto"],
+    /* salud */
+    ["chopo","Consultas/Estudios"],["laboratorio","Consultas/Estudios"],["alergologo","Consultas/Estudios"],["dermatologo","Consultas/Estudios"],["similares","Medicina"],["farmacias guadalajara","Medicina"],["farmacia del ahorro","Medicina"],
+    ["veterinario","Familia/Mascotas"],["veterinaria","Familia/Mascotas"],["frida","Familia/Mascotas"],
+    /* viajes y salidas */
+    ["despegar","Alojamiento"],["airbnb","Alojamiento"],["hotel","Alojamiento"],
+    ["aeromexico","Transporte"],["volaris","Transporte"],["viva aerobus","Transporte"],["vuelo","Transporte"],["vuelos","Transporte"],["trenitalia","Transporte"],["camion","Transporte"],
+    ["didi","Uber"],["taxi","Uber"],
+    ["ticketmaster","Salidas"],["cinemex","Salidas"],["concierto","Salidas"],["boliche","Salidas"],
+    /* otros vistos en el histórico */
+    ["oxxo","Abarrotes"],["seven","Abarrotes"],["7 eleven","Abarrotes"],["kiosko","Abarrotes"],
+    ["uber one","Suscripciones"],["apple arcade","Suscripciones"],["disney","Suscripciones"],["hbo","Suscripciones"],["vix","Suscripciones"],["paramount","Suscripciones"],
+    ["mundial","Salidas"],["estampas","Colección"],["album","Colección"],["sobres del album","Colección"]
+  ]
 };
 function importDanyPack(){
   var nc=0,nr=0;
@@ -3294,9 +3566,17 @@ function importDanyPack(){
     if(!DB.settings.cats[c[0]]){ DB.settings.cats[c[0]]={kind:"out",et:c[1],orig:null}; nc++; }
     DB.settings.catET=DB.settings.catET||{}; if(DB.settings.catET[c[0]]==null) DB.settings.catET[c[0]]=c[1];
   });
+  DANY_PACK2.cats.forEach(function(c){
+    if(!DB.settings.cats[c[0]]){ DB.settings.cats[c[0]]={kind:c[1],et:c[2],orig:null}; nc++; }
+  });
   DB.settings.customRules=DB.settings.customRules||[];
   var have={}; DB.settings.customRules.forEach(function(r){ have[r[0]]=1; });
-  DANY_PACK.rules.forEach(function(r){ if(!have[r[0]]){ DB.settings.customRules.push([r[0],r[1]]); nr++; } });
+  /* las del pack v2 son más específicas (p.ej. "uber one", "refrendo"): van AL FRENTE
+     para ganarle a las genéricas ("uber", "coche", "consulta") ya presentes */
+  var front=[];
+  DANY_PACK2.rules.forEach(function(r){ if(!have[r[0]]){ have[r[0]]=1; front.push([r[0],r[1]]); nr++; } });
+  DANY_PACK.rules.forEach(function(r){ if(!have[r[0]]){ have[r[0]]=1; DB.settings.customRules.push([r[0],r[1]]); nr++; } });
+  DB.settings.customRules=front.concat(DB.settings.customRules);
   applyConfig(); save(); render();
   toast("Listo: "+nc+" categorías y "+nr+" palabras nuevas ✔",true);
 }
@@ -3357,7 +3637,9 @@ function setAccentMode(m){ DB.settings.accentMode=m; save(); render(); applyAcce
 function setAccentColor(h){ DB.settings.accentMode="fixed"; DB.settings.accentColor=h; save(); render(); applyAccent(); }
 
 /* ============ SHEET (crear/editar) ============ */
-var draft=null,draftId=null,draftMultiIndex=null;
+var draft=null,draftId=null,draftMultiIndex=null,__draftSnap=null,__multiDirty=false;
+/* ¿hay cambios sin guardar en la tarjeta abierta? (comparado contra cómo se abrió) */
+function draftDirty(){ return !!(draft && __draftSnap!=null && JSON.stringify(draft)!==__draftSnap); }
 var __swy=null,__swSh=null,__swAtTop=false,__swInner=null;
 function fmtDateTime(ts){ if(!ts) return ""; var d=new Date(ts);
   var f=d.toLocaleDateString("es-MX",{day:"numeric",month:"short"})+" "+d.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"});
@@ -3412,6 +3694,7 @@ function openSheet(pre,id,title,transferPre){
   } else if(transferPre){ draft=Object.assign({kind:"transfer"},transferPre); draftId=null; }
   else { draft=Object.assign({kind:"txn",date:E.todayISO(),amount:0,type:"Egreso",category:null,account:V.account,place:"",details:"",tags:"",expenseType:"",msi:1,repeat:"none",scope:"personal"},pre||{}); if(draft.scope==="shared"){ if(draft.paidBy!=="p1"&&draft.paidBy!=="p2") draft.paidBy=prof(); if(typeof draft.splitP1!=="number") draft.splitP1=defaultSplit(); draft.expenseType=""; } draftId=null; }
   catOpen=false; catQ="";
+  __draftSnap=JSON.stringify(draft);
   renderSheet(title||"Registro");
 }
 function renderSheet(title){
@@ -3480,6 +3763,7 @@ function renderSheet(title){
   var inner='<div class="sheethead">'+
       '<button class="shbtn" onclick="closeSheet()">'+ico("close",19)+'</button><div class="shtitle">'+esc(title)+'</div><div class="shright">'+actions+'</div></div>'+
     '<div class="amtwrap"><span class="cur">$</span><input class="amt-edit" id="dfAmt" inputmode="decimal" value="'+esc(fmtAmtIn(d.amount))+'" placeholder="0" oninput="amtInput(this)"></div>'+
+    tripFxChipHTML()+
     '<div class="daterow"><label class="datechip" onclick="openDatePicker(event,\'dfDate\')">'+ico("cal",15)+'<span id="dateLbl">'+esc(dateChipLabel(d.date))+'</span>'+
       '<input type="date" id="dfDate" value="'+esc(d.date)+'" oninput="if(draft){draft.date=this.value;syncDateUI()}"></label>'+
       '<div class="dquick"><button class="'+(d.date===t?"on":"")+'" onclick="draftDate(\''+t+'\')">Hoy</button><button class="'+(d.date===y?"on":"")+'" onclick="draftDate(\''+y+'\')">Ayer</button></div></div>'+
@@ -3659,7 +3943,11 @@ function draftCat(c){ if(!draft) return; c=unq(c); draft.category=c; catOpen=fal
     renderSheet(shTitle()); return;
   }
   var CM=E.catsMap(); var k=CM[c]?CM[c].kind:"out"; if(k==="in")draft.type="Ingreso"; else if(k==="out")draft.type="Egreso"; draft.expenseType=etFor(c,draft.type); renderSheet(draftId?"Editar":"Registro"); }
-function closeSheet(){ if(draftMultiIndex!=null){ draftMultiIndex=null; draft=null; draftId=null; renderMulti(); return; } dismissSheet(); draft=null; draftId=null; }
+function closeSheet(){
+  /* guardia anti-cierre accidental (swipe/Escape/X): si moviste algo, confirma antes de tirar el progreso */
+  if(draftDirty() && !confirm(draftId?"Editaste este movimiento. ¿Cerrar sin guardar los cambios?":"Llevas datos capturados. ¿Cerrar sin guardar este movimiento?")) return;
+  __draftSnap=null;
+  if(draftMultiIndex!=null){ draftMultiIndex=null; draft=null; draftId=null; renderMulti(); return; } dismissSheet(); draft=null; draftId=null; }
 function saveSheet(){
   if(!draft) return;
   var d=draft;
@@ -3670,7 +3958,9 @@ function saveSheet(){
     ? {kind:"transfer",date:d.date,amount:Math.round(d.amount*100)/100,fromAccount:d.fromAccount,toAccount:d.toAccount,details:(d.details||"").trim(),msi:d.msi||1}
     : {kind:"txn",date:d.date,amount:Math.round(d.amount*100)/100,type:d.type,category:d.category,account:d.account,place:(d.place||"").trim(),details:(d.details||"").trim(),tags:(d.tags||"").trim(),expenseType:(d.scope==="shared")?"":(d.expenseType||""),msi:E.isTDC(d.account)?(d.msi||1):1,scope:(d.scope==="shared")?"shared":"personal"};
   if(obj.scope==="shared"){ obj.paidBy=(d.paidBy==="p2")?"p2":"p1"; obj.splitP1=(typeof d.splitP1==="number")?d.splitP1:defaultSplit(); }
-  if(draftMultiIndex!=null){ multi[draftMultiIndex]=obj; draftMultiIndex=null; draft=null; draftId=null; renderMulti(); return; }
+  if(obj.kind==="txn"&&!draftId&&draftMultiIndex==null) obj.tags=tripTag(obj.tags);
+  __draftSnap=null;
+  if(draftMultiIndex!=null){ multi[draftMultiIndex]=obj; __multiDirty=true; draftMultiIndex=null; draft=null; draftId=null; renderMulti(); return; }
   var mkRec=(obj.kind==="txn" && !draftId && d.repeat && d.repeat!=="none");
   if(obj.kind==="transfer") commitTransfer(obj,draftId); else commitTxn(obj,draftId);
   if(mkRec) addRecurring(obj,d.repeat);
@@ -3753,9 +4043,9 @@ function saveSplit(){
   splitS.lines.forEach(function(l){
     var a=parseFloat(l.amount)||0; if(a<=0) return;
     if(l.scope==="shared"){
-      commitTxn({date:splitS.date,amount:a,type:"Egreso",category:l.cat,account:splitS.account,place:splitS.place,details:l.details||"",tags:"",expenseType:"",msi:1,scope:"shared",paidBy:prof(),splitP1:defaultSplit()});
+      commitTxn({date:splitS.date,amount:a,type:"Egreso",category:l.cat,account:splitS.account,place:splitS.place,details:l.details||"",tags:tripTag(""),expenseType:"",msi:1,scope:"shared",paidBy:prof(),splitP1:defaultSplit()});
     } else {
-      commitTxn({date:splitS.date,amount:a,type:"Egreso",category:l.cat,account:splitS.account,place:splitS.place,details:l.details||"",tags:"",expenseType:etFor(l.cat,"Egreso"),msi:1,scope:"personal"});
+      commitTxn({date:splitS.date,amount:a,type:"Egreso",category:l.cat,account:splitS.account,place:splitS.place,details:l.details||"",tags:tripTag(""),expenseType:etFor(l.cat,"Egreso"),msi:1,scope:"personal"});
     }
     n++;
   });
@@ -3765,6 +4055,7 @@ function saveSplit(){
 /* ---- multi ---- */
 var multi=[];
 function openMulti(drafts){
+  __multiDirty=false;
   multi=drafts.map(function(r){
     if(r.kind==="transfer") return {kind:"transfer",date:r.date,amount:r.amount||0,fromAccount:r.fromAccount||V.xferFrom,toAccount:r.toAccount||V.xferTo,details:r.details||"",msi:r.msi||1};
     var sh=!!r.shared;
@@ -3775,7 +4066,7 @@ function openMulti(drafts){
   renderMulti();
 }
 function fmtShort(iso){ try{ return E.fromISO(iso).toLocaleDateString("es-MX",{day:"numeric",month:"short"}); }catch(e){ return iso; } }
-function openMultiEdit(i){ var m=multi[i]; if(!m) return; draftMultiIndex=i; draft=Object.assign({},m); draftId=null; catOpen=false; catQ=""; renderSheet(m.kind==="transfer"?"Editar transferencia":"Editar movimiento"); }
+function openMultiEdit(i){ var m=multi[i]; if(!m) return; draftMultiIndex=i; draft=Object.assign({},m); draftId=null; catOpen=false; catQ=""; __draftSnap=JSON.stringify(draft); renderSheet(m.kind==="transfer"?"Editar transferencia":"Editar movimiento"); }
 function renderMulti(){
   var cards=multi.map(function(m,i){
     var head,extra="";
@@ -3796,8 +4087,10 @@ function renderMulti(){
   document.getElementById("sheetroot").innerHTML=sheetShell("closeMulti",inner);
 }
 function rmMulti(i){ multi.splice(i,1); if(!multi.length){ closeMulti(); return; } renderMulti(); }
-function closeMulti(){ dismissSheet(); multi=[]; }
-function saveMulti(){ var n=multi.length; multi.forEach(function(m){ if(m.kind==="transfer") commitTransfer(m); else commitTxn(m); }); closeMulti(); V.amt=""; V.cat=null; render(); toast(n+" guardados ✔",true); }
+function closeMulti(force){
+  if(!force && __multiDirty && multi.length && !confirm("Ya editaste estos "+multi.length+" movimientos. ¿Cerrar sin guardarlos?")) return;
+  __multiDirty=false; dismissSheet(); multi=[]; }
+function saveMulti(){ var n=multi.length; multi.forEach(function(m){ if(m.kind==="transfer") commitTransfer(m); else { m.tags=tripTag(m.tags); commitTxn(m); } }); closeMulti(true); V.amt=""; V.cat=null; render(); toast(n+" guardados ✔",true); }
 
 /* ---- commit ---- */
 function incomeCatIn(cats){ cats=cats||DB.settings.cats||{}; for(var k in cats){ if(cats[k]&&cats[k].kind==="in") return k; } return "Otros Ingresos"; }
@@ -3967,7 +4260,7 @@ function renderAccountSheet(sel){
   function btn(name){ var t=E.isTDC(name); var isFav=fav.indexOf(name)>=0;
     return '<button class="'+(sel===name?"sel":"")+'" onclick="chooseAccount(\''+jsq(name)+'\')"><span class="cdot" style="background:'+esc(colorFor(name))+'"></span><span>'+esc(name)+'</span>'+(t?'<span class="tag">TDC</span>':'')+
       '<span class="star'+(isFav?" on":"")+'" onclick="toggleFav(\''+jsq(name)+'\',event)">'+ico("star",17)+'</span></button>'; }
-  var ACC=E.accounts(); var names=ACC.map(function(a){return a.name;});
+  var ACC=E.accounts().filter(function(a){return !a.archived;}); var names=ACC.map(function(a){return a.name;});
   var favList=fav.filter(function(n){return names.indexOf(n)>=0;});
   var deb=ACC.filter(function(a){return !a.tdc;}).map(function(a){return a.name;});
   var tdc=ACC.filter(function(a){return a.tdc;}).map(function(a){return a.name;});
