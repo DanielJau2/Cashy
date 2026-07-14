@@ -32,6 +32,8 @@ try{var __d=JSON.parse(localStorage.getItem("cashy_db_v1"));if(__d&&__d.settings
   --shadow:0 6px 16px rgba(60,50,120,.07);
   --glassbar:rgba(255,255,255,.44); --glassbrd:rgba(255,255,255,.7); --glasshadow:0 10px 30px rgba(70,60,140,.15);
   --sheetbg:rgba(250,249,253,.92); --scrim:rgba(30,25,60,.35);
+  /* OJO: --ink/--ink2/--ink3 = tinta PARA SUPERFICIES DE ACENTO (invierten con el fondo).
+     Para texto sobre panel/tarjeta usa SIEMPRE --text/--dim/--faint o --bone. */
   --ink:var(--bg); --ink2:var(--panel); --ink3:var(--panel2); --bone:var(--text);
 }
 [data-theme="dark"]{
@@ -230,8 +232,8 @@ input:focus,textarea:focus,select:focus{outline:none;}
 .ncard{background:var(--panel);border-radius:16px;padding:12px 13px;margin-bottom:9px;box-shadow:var(--shadow);}
 .ncard.wait{background:color-mix(in srgb,var(--panel) 88%,transparent);}
 .ncard.wait .nline{color:var(--dim);}
-.ncard .nline{font-size:14.5px;font-weight:600;color:var(--ink);}
-.ncard .nsub{font-size:13px;color:var(--ink);opacity:.74;margin-top:3px;line-height:1.4;}
+.ncard .nline{font-size:14.5px;font-weight:600;color:var(--text);}
+.ncard .nsub{font-size:13px;color:var(--text);opacity:.74;margin-top:3px;line-height:1.4;}
 .ncard .nsub b{opacity:1;}
 .ncard .nbtns{display:flex;gap:8px;margin-top:10px;}
 .ncard .nb{flex:1;border:none;border-radius:11px;padding:9px 0;font-size:13.5px;font-weight:700;cursor:pointer;}
