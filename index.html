@@ -1193,9 +1193,28 @@ function extractDetails(text, amountMatch, accountName, placeName){
 /* ---------------------- parseo principal ---------------------- */
 function parseText(text, ctx){
   ctx=ctx||{}; var baseISO=ctx.today||todayISO();
+  text=stripGreeting(text);
 
-  /* regalo/efectivo entre la pareja: "le di 1000 a ratoncita" */
-  var gift=detectCashGift(text, ctx);
+  /* 1º conjunto/personal y quién pagó — ANTES que el detector de regalos,
+     para que "efectivo … pagó ratona conjunto" sea gasto compartido y no un regalo */
+  var sharedPhrase=(function(){ var n=" "+normAlnum(text)+" ";
+    return / (para )?(los )?gastos? conjuntos? /.test(n) ||
+           / conjunt[oa]s? | compartid[oa]s? | a medias | entre los dos | mitad y mitad /.test(n); })();
+  var shared=hasSharedKw(text);
+  var personalKw=!shared&&hasPersonalKw(text);
+  var giftSrc=text; /* para el detector de regalos: texto sin strips */
+  /* pagador PRIMERO (sobre el texto original): "pagó ratoncita" usa el mismo
+     apodo que el keyword de conjunto y los strips se lo comerían */
+  var paidBy=detectPaidBy(text, ctx);
+  if(paidBy) text=stripPaidByText(text, ctx);
+  if(shared) text=stripSharedKw(text);
+  if(personalKw) text=stripPersonalText(text);
+  if(paidBy==="partner"&&!personalKw) shared=true; /* "pagó ratona" implica gasto de los dos salvo "personal" explícito */
+
+  /* regalo/efectivo entre la pareja: "le di 1000 a ratoncita".
+     Solo si el "conjunto" NO fue explícito (frase) ni hubo pagador: los apodos
+     (ratoncita) son ambiguos y ahí el regalo tiene prioridad, como siempre. */
+  var gift=(!sharedPhrase&&!paidBy)?detectCashGift(giftSrc, ctx):null;
   if(gift){
     var dR=parseDate(text, baseISO);
     var noD=dR.match? text.replace(new RegExp(escapeRe(dR.match),"i")," ") : text;
@@ -1209,9 +1228,6 @@ function parseText(text, ctx){
       matched:{date:!!dR.match, amount:!!aR, category:true, account:false}
     };
   }
-
-  var shared=hasSharedKw(text);
-  if(shared) text=stripSharedKw(text);
   var norm=normAlnum(text);
 
   var xfer=parseTransfer(text, ctx);
@@ -1247,6 +1263,7 @@ function parseText(text, ctx){
   return {
     kind:"txn", date:dateRes.date, amount:amount, type:type, category:category,
     account:account, place:place, details:details, expenseType:et, msi:msi, shared:shared,
+    paidByPartner:(paidBy==="partner"),
     matched:{date:!!dateRes.match, amount:!!amtRes, category:!!category, account:!!detectAccount(text)}
   };
 }
@@ -1270,7 +1287,11 @@ function splitMovements(text){
   }
   if(anchors.length<2) return null;
   var TRAIL={hoy:1,ayer:1,antier:1,anteayer:1,manana:1,pasado:1,pesos:1,peso:1,varos:1,varo:1,lucas:1,luca:1,mxn:1,pesos1:1,
-    en:1,con:1,de:1,del:1,al:1,la:1,el:1,los:1,las:1,mi:1,mis:1,a:1,por:1,y:1,e:1,sin:1,intereses:1,meses:1,mes:1,msi:1,mses:1,pagando:1,tarjeta:1,efectivo:1};
+    en:1,con:1,de:1,del:1,al:1,la:1,el:1,los:1,las:1,mi:1,mis:1,a:1,por:1,y:1,e:1,sin:1,intereses:1,meses:1,mes:1,msi:1,mses:1,pagando:1,tarjeta:1,efectivo:1,
+    /* ámbito y pagador tras el monto pertenecen al movimiento ANTERIOR */
+    para:1,gasto:1,gastos:1,conjunto:1,conjuntos:1,conjunta:1,conjuntas:1,compartido:1,compartida:1,compartidos:1,compartidas:1,
+    personal:1,personales:1,medias:1,mitad:1,pago:1,pague:1,invito:1,yo:1,ella:1,
+    ratones:1,ratona:1,ratoncita:1,raton:1,ratoncito:1,ratonchi:1,ratonchina:1,ratonchino:1};
   var ACCT_WORDS={}; CUR_ALIASES.forEach(function(al){ al[0].split(" ").forEach(function(w){ if(w) ACCT_WORDS[w]=1; }); });
   var starts=[0];
   for(var k=0;k<anchors.length-1;k++){
@@ -1291,6 +1312,7 @@ function splitMovements(text){
 
 function parseMulti(text, ctx){
   ctx=ctx||{};
+  text=stripGreeting(text);
   var today=ctx.today||todayISO();
   // 1º conectores (coma/"y"/";"…); 2º por montos (dictado sin puntuación)
   var pieces=String(text||"").split(/\s*(?:,|\+|;|\bo\b| y | e | pero | aunque | tambien | también | mas | más | luego | despues | después )\s*/i).map(function(s){return s.trim();}).filter(Boolean);
@@ -1410,8 +1432,64 @@ function sharedCatFor(c){
   return null;
 }
 var SHARED_KW=/\b(ratones|ratoncit[oa]s?)\b/gi;
-function hasSharedKw(text){ var n=" "+normAlnum(text)+" "; return / ratones | ratoncitos? | ratoncitas? /.test(n); }
-function stripSharedKw(text){ return String(text||"").replace(SHARED_KW," "); }
+function hasSharedKw(text){ var n=" "+normAlnum(text)+" ";
+  return / ratones | ratoncitos? | ratoncitas? /.test(n) ||
+         / (para )?(los )?gastos? conjuntos? /.test(n) ||
+         / conjunt[oa]s? | compartid[oa]s? | a medias | entre los dos | mitad y mitad /.test(n);
+}
+function stripSharedText(text){
+  return String(text||"")
+    .replace(/\b(para\s+)?(los\s+)?gastos?\s+conjuntos?\b/gi," ")
+    .replace(/\bconjunt[oa]s?\b/gi," ")
+    .replace(/\bcompartid[oa]s?\b/gi," ")
+    .replace(/\ba\s+medias\b/gi," ")
+    .replace(/\bentre\s+los\s+dos\b/gi," ")
+    .replace(/\bmitad\s+y\s+mitad\b/gi," ");
+}
+/* "personal" explícito: no es conjunto y la palabra no debe ensuciar el detalle */
+function hasPersonalKw(text){ return /(^|\s)(personal(es)?|solo\s+m[ií][oa])(\s|$)/i.test(normAlnum(text)); }
+function stripPersonalText(text){ return String(text||"").replace(/\bpersonal(es)?\b/gi," ").replace(/\bsolo\s+m[ií][oa]\b/gi," "); }
+/* saludo al asistente: "hola cashy …", "oye cashy …", "cashy …" */
+function stripGreeting(text){
+  return String(text||"").replace(/^\s*(?:(?:hola|hey|oye|okey|okay|ok|buenas(?:\s+(?:tardes|noches))?|buenos\s+d[ií]as)[\s,!.]*)?(?:c[a]?ch[iy]|cashy|cashi|kashy|cassie)\b[\s,!.:;]*/i,"")
+             .replace(/^\s*(?:hola|hey|oye)[\s,!.]+/i,"");
+}
+/* ¿quién pagó? → "partner" | "me" | null. También limpia la frase. */
+function detectPaidBy(text, ctx){
+  ctx=ctx||{};
+  var me=ctx.me||"p1", other=(me==="p1")?"p2":"p1";
+  var al=(ctx.personAliases&&ctx.personAliases[other])||[];
+  var extra=["ella","el","mi novia","mi novio","la ratona","el raton"];
+  var names=al.concat(extra).map(function(a){return normAlnum(a);}).filter(Boolean)
+    .sort(function(a,b){return b.length-a.length;});
+  var n=normAlnum(text);
+  var who=null;
+  for(var i=0;i<names.length;i++){
+    var nm=names[i].replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+    var re1=new RegExp("(^|\\s)pag(?:o|a|ando|ara)?\\s+(?:l[oa]\\s+)?(?:la\\s+|el\\s+|mi\\s+)?"+nm+"(\\s|$)");
+    var re2=new RegExp("(^|\\s)(?:la\\s+|el\\s+)?"+nm+"\\s+(?:l[oa]\\s+)?pag(?:o|a)(\\s|$)");
+    var re3=new RegExp("(^|\\s)invit(?:o|a)\\s+(?:la\\s+|el\\s+|mi\\s+)?"+nm+"(\\s|$)");
+    if(re1.test(n)||re2.test(n)||re3.test(n)){ who="partner"; break; }
+  }
+  if(!who && /(^|\s)(pague\s+yo|yo\s+pague|yo\s+lo\s+pague|pago\s+yo|pagando\s+yo)(\s|$)/.test(n)) who="me";
+  return who;
+}
+function stripPaidByText(text, ctx){
+  ctx=ctx||{};
+  var me=ctx.me||"p1", other=(me==="p1")?"p2":"p1";
+  var al=((ctx.personAliases&&ctx.personAliases[other])||[]).concat(["ella","el","él","mi novia","mi novio"]);
+  var t=String(text||"");
+  al.sort(function(a,b){return String(b).length-String(a).length;}).forEach(function(a){
+    if(!a) return;
+    var nm=String(a).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+    t=t.replace(new RegExp("\\bpag(?:o|ó|a|ando|ara|ará)?\\s+(?:l[oa]\\s+)?(?:la\\s+|el\\s+|mi\\s+)?"+nm+"\\b","gi")," ");
+    t=t.replace(new RegExp("\\b(?:la\\s+|el\\s+)?"+nm+"\\s+(?:l[oa]\\s+)?pag(?:o|ó|a)\\b","gi")," ");
+    t=t.replace(new RegExp("\\binvit(?:o|ó|a)\\s+(?:la\\s+|el\\s+|mi\\s+)?"+nm+"\\b","gi")," ");
+  });
+  t=t.replace(/\b(pague\s+yo|yo\s+pague|yo\s+lo\s+pague|pago\s+yo|pagando\s+yo|pagu[eé]\s+yo|yo\s+pagu[eé])\b/gi," ");
+  return t;
+}
+function stripSharedKw(text){ return stripSharedText(String(text||"").replace(SHARED_KW," ")); }
 
 /* ---- personas (regalos/efectivo entre la pareja) ---- */
 var GIVE_RE=/(^|\s)(le di|le entregue|le regale|le pase|le mande|le preste|le deposite|le transferi|le pague|le solte|di|entregue|regale|pase|mande|preste|transferi)(\s|$)/;
@@ -2007,7 +2085,9 @@ function entriesFor(scope){
   return o;
 }
 function catInitial(c){ return (c||"?").replace(/[^A-Za-zÁÉÍÓÚÑ]/,"").charAt(0).toUpperCase()||"$"; }
-function parseCtx(){ return {today:E.todayISO(),learn:DB.learn,customRules:DB.settings.customRules,account:V.account,me:prof(),personAliases:personAliases(),placesShared:DB.sharedMeta.places}; }
+function otherProf(){ return prof()==="p1"?"p2":"p1"; }
+/* En dictado, si no mencionas cuenta el default es EFECTIVO (Cash); el pad sí usa la cuenta activa. */
+function parseCtx(){ return {today:E.todayISO(),learn:DB.learn,customRules:DB.settings.customRules,account:"Cash",me:prof(),personAliases:personAliases(),placesShared:DB.sharedMeta.places}; }
 function jsq(s){ return String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'"); }
 function unq(s){ return String(s).replace(/\\'/g,"'").replace(/\\\\/g,"\\"); }
 function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
@@ -2260,7 +2340,7 @@ function interpret(){
     openSheet({date:r.date,amount:r.amount||currentAmount()||0,type:"Egreso",category:"Efectivo",account:"Cash",place:"",details:r.details||"",tags:"",expenseType:"",msi:1,scope:"shared",paidBy:g.from,splitP1:(g.to==="p1"?100:0),giftTo:g.to},null,"Confirmar efectivo");
     return;
   }
-  openSheet({date:r.date,amount:r.amount||currentAmount()||0,type:r.type||"Egreso",category:r.category,account:r.account||V.account,place:r.place||"",details:r.details||"",tags:"",expenseType:(r.shared?"":(r.category?etFor(r.category,r.type||"Egreso"):"")),msi:r.msi||1,scope:r.shared?"shared":"personal",paidBy:r.shared?prof():undefined,splitP1:r.shared?defaultSplit():undefined},null,"Confirmar registro");
+  openSheet({date:r.date,amount:r.amount||currentAmount()||0,type:r.type||"Egreso",category:r.category,account:r.account||V.account,place:r.place||"",details:r.details||"",tags:"",expenseType:(r.shared?"":(r.category?etFor(r.category,r.type||"Egreso"):"")),msi:r.msi||1,scope:r.shared?"shared":"personal",paidBy:r.shared?(r.paidByPartner?otherProf():prof()):undefined,splitP1:r.shared?defaultSplit():undefined},null,"Confirmar registro");
 }
 function openSheetFromPad(){
   if(V.mode==="Transferencia"){ openSheet(null,null,"Nueva transferencia",{kind:"transfer",date:E.todayISO(),amount:currentAmount(),fromAccount:V.xferFrom,toAccount:V.xferTo,details:"",msi:1}); return; }
@@ -4063,7 +4143,7 @@ function openMulti(drafts){
     var sh=!!r.shared;
     if(r.cashGift){ var g=r.cashGift;
       return {kind:"txn",date:r.date,amount:r.amount||0,type:"Egreso",category:"Efectivo",account:"Cash",place:"",details:r.details||"",tags:"",expenseType:"",msi:1,scope:"shared",paidBy:g.from,splitP1:(g.to==="p1"?100:0)}; }
-    return {kind:"txn",date:r.date,amount:r.amount||0,type:r.type||"Egreso",category:sh?(r.category||null):(r.category||(r.type==="Ingreso"?"Otros Ingresos":"Restaurante")),account:r.account||V.account,place:r.place||"",details:r.details||"",tags:"",expenseType:(sh||!r.category)?"":etFor(r.category,r.type||"Egreso"),msi:r.msi||1,scope:sh?"shared":"personal",paidBy:sh?prof():undefined,splitP1:sh?defaultSplit():undefined};
+    return {kind:"txn",date:r.date,amount:r.amount||0,type:r.type||"Egreso",category:sh?(r.category||null):(r.category||(r.type==="Ingreso"?"Otros Ingresos":"Restaurante")),account:r.account||V.account,place:r.place||"",details:r.details||"",tags:"",expenseType:(sh||!r.category)?"":etFor(r.category,r.type||"Egreso"),msi:r.msi||1,scope:sh?"shared":"personal",paidBy:sh?(r.paidByPartner?otherProf():prof()):undefined,splitP1:sh?defaultSplit():undefined};
   });
   renderMulti();
 }
