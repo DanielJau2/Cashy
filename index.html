@@ -1068,12 +1068,20 @@ var ACC_FILLER="(?:la|el|mi|un|una|tarjeta|tdc|de|del|credito|debito)";
 function escRe(x){ return x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"); }
 function detectAccount(text){
   var t=normAlnum(text);
+  /* "en/a X" solo señala CUENTA si hay verbo de dinero-entrando; si no, "en costco" es la tienda */
+  var MOVE_RE=/\b(ingres\w*|deposit\w*|reembols\w*|devolv\w*|devuelv\w*|abon\w*|cayo|cayeron|entro|entraron|llego|llegaron|llega|transfer\w*|recib\w*|retir\w*|nomina)\b/;
+  var canPrep=MOVE_RE.test(t);
   for(var i=0;i<CUR_ALIASES.length;i++){
     var a=escRe(CUR_ALIASES[i][0]);
     /* "con|pagué con|tarjeta|tdc" + hasta 5 palabras puente + alias:
        cubre "con la tarjeta de crédito de costco", "tarjeta costco", "con mi bbva" */
     var re=new RegExp("\\b(?:con|pagando|pague|pago|tarjeta|tdc)(?:\\s+"+ACC_FILLER+"){0,5}\\s+"+a+"\\b");
     if(re.test(t)) return CUR_ALIASES[i][1];
+    /* "ingresaron en arq", "me reembolsaron en la likeu", "deposité a openbank" */
+    if(canPrep){
+      var re2=new RegExp("\\b(?:en|a|al|desde|hacia)(?:\\s+(?:la|el|mi|cuenta|tarjeta|de))*\\s+"+a+"\\b");
+      if(re2.test(t)) return CUR_ALIASES[i][1];
+    }
   }
   if(hasKw(t,"en efectivo")||hasKw(t,"efectivo")) return "Cash";
   return null;
@@ -1081,6 +1089,11 @@ function detectAccount(text){
 
 /* ---------------------- transferencias ---------------------- */
 function parseTransfer(text, ctx){
+  /* montos distintos: "transferí 1000 de ARQ a Santander llegaron 17000" (divisas):
+     lo que LLEGA se captura aparte y se retira de la frase para no confundir al resto */
+  var toAmt=null, mLl=String(text||"").match(/(?:llegan|llegaron|entran|entraron|caen|cayeron|recib[ií]|se\s+recibieron)\s+(?:como\s+)?\$?\s*([\d][\d,\.]*)\s*(?:pesos|mxn)?/i);
+  if(mLl){ toAmt=parseFloat(mLl[1].replace(/,/g,"")); if(isNaN(toAmt)||toAmt<=0) toAmt=null;
+    if(toAmt!=null) text=String(text).replace(mLl[0]," "); }
   ctx=ctx||{};
   var t=normAlnum(text);
   var amt=parseAmount(text), amount=amt?amt.amount:null, msi=parseMSI(text);
@@ -1097,11 +1110,11 @@ function parseTransfer(text, ctx){
   // no cuando es el MÉTODO ("con <tdc>" = compra pagada con esa tarjeta).
   if(isPay && tdc && !isXfer && tdc!==payMethod){
     var fromPay=payMethod || fromDE || null;
-    return {kind:"transfer", from:fromPay, to:tdc, amount:amount, msi:msi, tdcpay:true};
+    return {kind:"transfer", from:fromPay, to:tdc, amount:amount, msi:msi, tdcpay:true, toAmount:toAmt};
   }
-  if(isRet){ return {kind:"transfer", from:(fromDE||detectAccount(text)||aliasIn(t)||null), to:"Cash", amount:amount, msi:1}; }
-  if(isDep){ return {kind:"transfer", from:"Cash", to:(toDE||detectAccount(text)||null), amount:amount, msi:1}; }
-  if(isXfer || (fromDE && toDE)){ return {kind:"transfer", from:fromDE, to:toDE, amount:amount, msi:1}; }
+  if(isRet){ return {kind:"transfer", from:(fromDE||detectAccount(text)||aliasIn(t)||null), to:"Cash", amount:amount, msi:1, toAmount:toAmt}; }
+  if(isDep){ return {kind:"transfer", from:"Cash", to:(toDE||detectAccount(text)||null), amount:amount, msi:1, toAmount:toAmt}; }
+  if(isXfer || (fromDE && toDE)){ return {kind:"transfer", from:fromDE, to:toDE, amount:amount, msi:1, toAmount:toAmt}; }
   return null;
 }
 
@@ -1236,7 +1249,7 @@ function parseText(text, ctx){
   if(xfer){
     return {
       kind:"transfer", date:dateRes.date, amount:xfer.amount,
-      fromAccount:xfer.from, toAccount:xfer.to, tdcpay:!!xfer.tdcpay,
+      fromAccount:xfer.from, toAccount:xfer.to, tdcpay:!!xfer.tdcpay, toAmount:(typeof xfer.toAmount==="number"?xfer.toAmount:null),
       msi:xfer.msi||1, details:"", category:"Transferencias",
       matched:{date:!!dateRes.match, amount:xfer.amount!=null, transfer:true}
     };
@@ -1338,7 +1351,8 @@ function expenseTypeFor(category,type){ if(type!=="Egreso") return ""; var c=CAT
 function activeEntries(entries){ return Object.keys(entries||{}).map(function(k){return entries[k];}).filter(function(e){return e && !e.deleted;}); }
 function cashDelta(e){
   if(e.deleted) return 0;
-  if(e.kind==="transfer"){ var d=0; if(e.fromAccount==="Cash") d-=(e.amount||0); if(e.toAccount==="Cash") d+=(e.amount||0); return d; }
+  if(e.kind==="transfer"){ var d=0; if(e.fromAccount==="Cash") d-=(e.amount||0);
+    if(e.toAccount==="Cash") d+=((typeof e.toAmount==="number"&&e.toAmount>0)?e.toAmount:(e.amount||0)); return d; }
   if(e.account!=="Cash") return 0;
   if(typeof e.amount!=="number") return 0;
   return e.type==="Ingreso"? e.amount : -e.amount;
@@ -1393,9 +1407,10 @@ function expandEntry(e){
     if(isTDC(e.toAccount)){
       return [{tab:"tdc", row:[formatDateMD(e.date), amountForExport(-(e.amount||0)), "", "Transferencias", e.toAccount, e.fromAccount||"", e.details||"", (e.msi||1), ""]}];
     }
+    var toAmt=(typeof e.toAmount==="number"&&e.toAmount>0)?e.toAmount:(e.amount||0);
     return [
       {tab:"normal", row:[formatDateMD(e.date), amountForExport(e.amount||0), "Egreso", "", "Transferencias", "", e.fromAccount||"", e.details||"", ""]},
-      {tab:"normal", row:[formatDateMD(e.date), amountForExport(e.amount||0), "Ingreso", "", "Transferencias", "", e.toAccount||"", e.details||"", ""]}
+      {tab:"normal", row:[formatDateMD(e.date), amountForExport(toAmt), "Ingreso", "", "Transferencias", "", e.toAccount||"", e.details||"", ""]}
     ];
   }
   if(isTDC(e.account)){
@@ -2256,33 +2271,85 @@ function heroSize(){ var n=(V.amt||"0").replace(".","").length; return n>9?" sz3
 function refreshHero(pop){ var el=document.querySelector(".hero .amt"); if(el){ el.className="amt"+(V.amt?"":" zero")+heroSize(); el.innerHTML='<span class="cur">$</span>'+heroAmt(); if(pop){ el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); } } }
 function currentAmount(){ var n=parseFloat(V.amt); return isNaN(n)?0:Math.round(n*100)/100; }
 function focusNL(){ var el=document.getElementById("nlText"); if(el){ el.focus(); } }
-var recog=null, recognizing=false, dictBuffer="";
+var recog=null, recognizing=false, dictBuffer="", micWanted=false, __micLast=0, __micRetried=false, __micStopWatch=null, __micSilence=null;
 function setMicState(on){
   var b=document.getElementById("micBig");
   if(b){ b.classList.toggle("rec",on); b.innerHTML=(on?ico("stop",26):ico("mic",27)); }
 }
 function autoGrow(el){ if(!el) return; el.style.height="auto"; el.style.height=(el.scrollHeight)+"px"; }
-function startDictation(){
+/* iOS corta la sesión de voz a los ~30-60s o tras una pausa: mientras el usuario
+   no toque "stop", re-armamos una sesión NUEVA conservando lo dictado (dictado largo).
+   Y si stop() nunca dispara onend (bug de iOS que dejaba el mic zombi y obligaba a
+   reabrir la app), un watchdog fuerza el cierre y analiza. */
+function killRecog(){ if(recog){ try{ recog.onend=null; recog.onerror=null; recog.onresult=null; recog.abort(); }catch(e){} recog=null; } }
+function micFinalize(){
+  micWanted=false; recognizing=false; setMicState(false);
+  if(__micStopWatch){ clearTimeout(__micStopWatch); __micStopWatch=null; }
+  if(__micSilence){ clearTimeout(__micSilence); __micSilence=null; }
+  killRecog();
+  var el=document.getElementById("nlText"); if(el&&el.value.trim()) interpret();
+}
+function micArmSilence(){
+  if(__micSilence) clearTimeout(__micSilence);
+  /* si ya hay texto y llevas 8s sin decir nada, cerramos y analizamos solos */
+  __micSilence=setTimeout(function(){
+    var el=document.getElementById("nlText");
+    if(micWanted && el && el.value.trim()) micFinalize();
+  },8000);
+}
+function micSession(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ focusNL(); toast("Toca el micrófono de tu teclado para dictar"); return; }
-  if(recognizing){ stopDictation(); return; }         // 2º toque = parar y analizar
-  if(recog){ try{ recog.onend=null; recog.onerror=null; recog.onresult=null; recog.abort(); }catch(e){} recog=null; } /* iOS deja la instancia colgada */
+  if(!SR||!micWanted) return;
+  killRecog();
   try{
     recog=new SR(); recog.lang="es-MX"; recog.continuous=true; recog.interimResults=true; recog.maxAlternatives=1;
-    dictBuffer=""; recognizing=true; setMicState(true);
     recog.onresult=function(ev){
+      __micLast=Date.now(); __micRetried=false;
       var fin="", intr="";
       for(var i=ev.resultIndex;i<ev.results.length;i++){ var r=ev.results[i]; if(r.isFinal) fin+=r[0].transcript+" "; else intr+=r[0].transcript; }
       if(fin) dictBuffer+=fin;
       var el=document.getElementById("nlText"); if(el){ el.value=(dictBuffer+intr).trim(); autoGrow(el); }
+      micArmSilence();
     };
-    recog.onerror=function(e){ recognizing=false; setMicState(false); if(e&&e.error==="not-allowed") toast("Permite el micrófono en Safari"); };
-    recog.onend=function(){ recognizing=false; setMicState(false); var el=document.getElementById("nlText"); if(el&&el.value.trim()) interpret(); };
-    recog.start();
-    toast("Escuchando… toca el micrófono otra vez para analizar");
-  }catch(e){ recognizing=false; setMicState(false); recog=null; toast("No pude iniciar el mic; intenta de nuevo"); focusNL(); }
+    recog.onerror=function(e){
+      var err=(e&&e.error)||"";
+      if(err==="not-allowed"||err==="service-not-allowed"){ micFinalize(); toast("Permite el micrófono en Safari (aA → Configuración del sitio)"); return; }
+      if(err==="no-speech") return; /* onend se encarga */
+      /* aborted / audio-capture / network: un reintento limpio y si no, cerramos con lo que haya */
+      if(micWanted && !__micRetried){ __micRetried=true; setTimeout(micSession,400); }
+      else micFinalize();
+    };
+    recog.onend=function(){
+      if(__micStopWatch){ clearTimeout(__micStopWatch); __micStopWatch=null; }
+      if(micWanted){ setTimeout(micSession,250); return; } /* iOS cortó solo: seguimos escuchando */
+      micFinalize();
+    };
+    recog.start(); recognizing=true; setMicState(true);
+  }catch(e){
+    /* InvalidStateError: instancia previa colgada; un reintento con instancia fresca */
+    killRecog();
+    if(micWanted && !__micRetried){ __micRetried=true; setTimeout(micSession,400); }
+    else { micFinalize(); toast("No pude iniciar el mic; intenta de nuevo"); focusNL(); }
+  }
 }
-function stopDictation(){ if(recog){ try{recog.stop();}catch(e){} } recognizing=false; setMicState(false); }
+function startDictation(){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ focusNL(); toast("Toca el micrófono de tu teclado para dictar"); return; }
+  if(micWanted||recognizing){ stopDictation(); return; }   // 2º toque = parar y analizar
+  dictBuffer=""; micWanted=true; __micRetried=false; __micLast=Date.now();
+  micSession();
+  if(recognizing) toast("Escuchando… habla lo que quieras; toca de nuevo (o calla 8s) para analizar");
+}
+function stopDictation(){
+  micWanted=false;
+  if(__micSilence){ clearTimeout(__micSilence); __micSilence=null; }
+  if(recog){
+    try{ recog.stop(); }catch(e){}
+    /* si onend no llega en 700ms (iOS zombi), forzamos el cierre nosotros */
+    if(__micStopWatch) clearTimeout(__micStopWatch);
+    __micStopWatch=setTimeout(function(){ if(!micWanted) micFinalize(); },700);
+  } else micFinalize();
+}
 
 function quickSave(){
   if(recognizing){ stopDictation(); return; }
@@ -2332,7 +2399,7 @@ function interpret(){
   if(drafts.length>1){ openMulti(drafts); return; }
   var r=drafts[0];
   if(r.kind==="transfer"){
-    openSheet(null,null,"Confirmar transferencia",{kind:"transfer",date:r.date,amount:r.amount||currentAmount()||0,fromAccount:r.fromAccount||V.xferFrom,toAccount:r.toAccount||V.xferTo,details:r.details||"",msi:r.msi||1});
+    openSheet(null,null,"Confirmar transferencia",{kind:"transfer",date:r.date,amount:r.amount||currentAmount()||0,toAmount:(typeof r.toAmount==="number"?r.toAmount:null),fromAccount:r.fromAccount||V.xferFrom,toAccount:r.toAccount||V.xferTo,details:r.details||"",msi:r.msi||1});
     return;
   }
   if(r.cashGift){
@@ -3784,7 +3851,9 @@ function renderSheet(title){
   if(d.kind==="transfer"){
     body='<div class="field"><div class="fl">Desde</div>'+acctBtnInline("df",d.fromAccount)+'</div>'+
       '<div class="field"><div class="fl">Hasta</div>'+acctBtnInline("dt",d.toAccount)+'</div>'+
-      (E.isTDC(d.toAccount)?'<p style="font-size:12.5px;color:var(--faint);margin:-2px 0 12px">Pago de tarjeta: irá una línea a la pestaña TDC (monto negativo).</p>':'')+
+      (E.isTDC(d.toAccount)?'<p style="font-size:12.5px;color:var(--faint);margin:-2px 0 12px">Pago de tarjeta: irá una línea a la pestaña TDC (monto negativo).</p>':
+        '<div class="field"><div class="fl">Llega (opcional, si es distinto — p.ej. dólares→pesos)</div><input id="dfXTo" inputmode="decimal" placeholder="mismo monto" value="'+esc(d.toAmount>0?fmtAmtIn(d.toAmount):"")+'" oninput="if(draft){var v=parseFloat(this.value.replace(/[^0-9.]/g,\'\'));draft.toAmount=(v>0?Math.round(v*100)/100:null);}"></div>'+
+        (d.toAmount>0?'<p style="font-size:12.5px;color:var(--faint);margin:-2px 0 12px">Salen '+esc(money(d.amount||0))+' de '+esc(d.fromAccount)+' · llegan '+esc(money(d.toAmount))+' a '+esc(d.toAccount)+'.</p>':''))+
       '<div class="field"><div class="fl">Descripción</div><input id="dfDet" value="'+esc(d.details)+'" oninput="if(draft)draft.details=this.value"></div>';
   } else {
     var isSh=(d.scope==="shared");
@@ -4037,7 +4106,7 @@ function saveSheet(){
   if(d.kind==="transfer"){ if(d.fromAccount===d.toAccount){ toast("Elige cuentas distintas"); return; } }
   else if(!d.category){ toast("Elige una categoría"); return; }
   var obj = d.kind==="transfer"
-    ? {kind:"transfer",date:d.date,amount:Math.round(d.amount*100)/100,fromAccount:d.fromAccount,toAccount:d.toAccount,details:(d.details||"").trim(),msi:d.msi||1}
+    ? {kind:"transfer",date:d.date,amount:Math.round(d.amount*100)/100,toAmount:(d.toAmount>0?Math.round(d.toAmount*100)/100:null),fromAccount:d.fromAccount,toAccount:d.toAccount,details:(d.details||"").trim(),msi:d.msi||1}
     : {kind:"txn",date:d.date,amount:Math.round(d.amount*100)/100,type:d.type,category:d.category,account:d.account,place:(d.place||"").trim(),details:(d.details||"").trim(),tags:(d.tags||"").trim(),expenseType:(d.scope==="shared")?"":(d.expenseType||""),msi:E.isTDC(d.account)?(d.msi||1):1,scope:(d.scope==="shared")?"shared":"personal"};
   if(obj.scope==="shared"){ obj.paidBy=(d.paidBy==="p2")?"p2":"p1"; obj.splitP1=(typeof d.splitP1==="number")?d.splitP1:defaultSplit(); }
   if(obj.kind==="txn"&&!draftId&&draftMultiIndex==null) obj.tags=tripTag(obj.tags);
@@ -4139,7 +4208,7 @@ var multi=[];
 function openMulti(drafts){
   __multiDirty=false;
   multi=drafts.map(function(r){
-    if(r.kind==="transfer") return {kind:"transfer",date:r.date,amount:r.amount||0,fromAccount:r.fromAccount||V.xferFrom,toAccount:r.toAccount||V.xferTo,details:r.details||"",msi:r.msi||1};
+    if(r.kind==="transfer") return {kind:"transfer",date:r.date,amount:r.amount||0,toAmount:(typeof r.toAmount==="number"?r.toAmount:null),fromAccount:r.fromAccount||V.xferFrom,toAccount:r.toAccount||V.xferTo,details:r.details||"",msi:r.msi||1};
     var sh=!!r.shared;
     if(r.cashGift){ var g=r.cashGift;
       return {kind:"txn",date:r.date,amount:r.amount||0,type:"Egreso",category:"Efectivo",account:"Cash",place:"",details:r.details||"",tags:"",expenseType:"",msi:1,scope:"shared",paidBy:g.from,splitP1:(g.to==="p1"?100:0)}; }
