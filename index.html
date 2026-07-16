@@ -234,8 +234,9 @@ input:focus,textarea:focus,select:focus{outline:none;}
 .ncard.wait .nline{color:var(--dim);}
 .ncard .nline{font-size:14.5px;font-weight:600;color:var(--text);}
 .ncard .nsub{font-size:13px;color:var(--text);opacity:.74;margin-top:3px;line-height:1.4;}
-.padplus{width:54px;border-radius:16px;border:1.5px solid var(--line);background:var(--panel2);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .08s}
-.padplus:active{transform:scale(.94)}
+.saverow{display:flex;gap:10px;align-items:stretch}
+.saverow .btn.primary{flex:1;width:auto;margin:0}
+.saverow .padplus{flex:none;width:64px;padding:0;display:flex;align-items:center;justify-content:center}
 /* inputs nativos de fecha/hora/mes: cajitas legibles en ambos temas (iOS incluidos) */
 input[type=date],input[type=time],input[type=month]{background:var(--panel2);border:1.5px solid var(--line);color:var(--text);border-radius:12px;padding:10px 12px;min-height:46px;width:100%;font:inherit;font-size:15px;-webkit-appearance:none;appearance:none;color-scheme:light}
 [data-theme="dark"] input[type=date],[data-theme="dark"] input[type=time],[data-theme="dark"] input[type=month]{color-scheme:dark}
@@ -251,6 +252,8 @@ input[type=date]::-webkit-date-and-time-value,input[type=month]::-webkit-date-an
 .setmenu .mtt .s{font-size:12px;color:var(--faint);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .setmenu .chev{color:var(--faint);flex:none}
 .mgrouplbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:700;margin:4px 4px 8px}
+.pavatar{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--acc),#9f8cff);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:19px;flex:none}
+.profcard .mrow:active{background:var(--panel)}
 .setback{display:flex;align-items:center;gap:6px;color:var(--acc);font-weight:700;font-size:14.5px;cursor:pointer;margin-bottom:12px;width:max-content}
 
 .ncard .nsub b{opacity:1;}
@@ -2251,8 +2254,8 @@ function viewReg(){
       '</div>'+
       chips+
       '<div class="pad">'+pad+'</div>'+
-      '<div style="display:flex;gap:10px;align-items:stretch"><button class="btn primary" style="flex:1" onclick="quickSave()">'+ico("check",20)+' Guardar</button>'+
-      '<button class="padplus" title="Tarjeta completa" onclick="openSheetFromPad()">'+ico("plus",22)+'</button></div>'+
+      '<div class="saverow"><button class="btn primary" onclick="quickSave()">'+ico("check",20)+' Guardar</button>'+
+      '<button class="btn primary padplus" title="Tarjeta completa" onclick="openSheetFromPad()">'+ico("plus",24)+'</button></div>'+
     '</div>'+
     '<aside class="reg-side">'+regSideHTML()+'</aside>';
 }
@@ -2771,7 +2774,12 @@ document.addEventListener("click",function(e){
 function dbSig(){ var n=0,mx=0,ks=Object.keys(DB.entries);
   for(var i=0;i<ks.length;i++){ var e=DB.entries[i<0?0:ks[i]]; if(!e) continue; n++; if(e.updatedAt>mx) mx=e.updatedAt; if(e.deleted) n+=7; }
   return ks.length+"·"+mx+"·"+n+"·"+(DB.siriQueue||[]).length+"·"+((DB.sharedMeta&&DB.sharedMeta.updatedAt)||0); }
-function renderQuiet(){ document.documentElement.classList.add("noanim"); render();
+function renderQuiet(){
+  /* si estás escribiendo en un campo del área principal, el refresco del sync espera:
+     re-renderizar aquí destruía el input del presupuesto a media captura */
+  var a=document.activeElement;
+  if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && document.getElementById("app") && document.getElementById("app").contains(a)) return;
+  document.documentElement.classList.add("noanim"); render();
   setTimeout(function(){ document.documentElement.classList.remove("noanim"); },50); }
 function rowDel(id){ var e=DB.entries[id]; if(!e) return; e.deleted=true; e.updatedAt=Date.now(); __rsOpen=null; save(); renderQuiet();
   toast("Borrado","",{label:"Deshacer",fn:function(){ var x=DB.entries[id]; if(x){ x.deleted=false; x.updatedAt=Date.now(); save(); renderQuiet(); toast("Restaurado ✔",true); } }}); }
@@ -3159,10 +3167,19 @@ function viewExport(){
       '<div class="sync-line" id="impMsg"></div></div>']
   ];
   var activeX=V.expPage&&pagesX.some(function(p){return p[0]===V.expPage;})?V.expPage:null;
-  var menuX='<div'+(activeX?' hidden':'')+'><div class="setmenu">'+pagesX.map(function(p){
+  var nm=names()[prof()]||"", other=names()[prof()==="p1"?"p2":"p1"]||"";
+  var rol=(prof()==="p1")?"Ratón":"Ratona";
+  var profCard='<div class="setmenu profcard"><div class="mrow" style="cursor:default;padding:16px">'+
+    '<div class="pavatar">'+esc((nm||rol).trim().charAt(0).toUpperCase())+'</div>'+
+    '<div class="mtt"><div class="t" style="font-size:16.5px">'+esc(nm||rol)+'</div>'+
+    '<div class="s">Perfil '+rol+(other?(' · Ratones con '+esc(other)):'')+'</div></div></div></div>';
+  var menuX='<div'+(activeX?' hidden':'')+'>'+profCard+'<div class="setmenu">'+pagesX.map(function(p){
     return '<div class="mrow" onclick="openExpPage(\''+p[0]+'\')"><div class="mic2" style="background:'+p[3]+'">'+ico(p[4],17)+'</div>'+
       '<div class="mtt"><div class="t">'+esc(p[1])+'</div><div class="s">'+esc(p[2])+'</div></div><div class="chev">'+ico("chevR",17)+'</div></div>';
-  }).join("")+'</div></div>';
+  }).join("")+
+    '<div class="mrow" onclick="go(\'set\')"><div class="mic2" style="background:#64748b">'+ico("gear",17)+'</div>'+
+      '<div class="mtt"><div class="t">Ajustes</div><div class="s">cuentas, categorías, Ratones, sync…</div></div><div class="chev">'+ico("chevR",17)+'</div></div>'+
+  '</div></div>';
   var bodyX=pagesX.map(function(p){
     return '<div class="setpage"'+(activeX===p[0]?'':' hidden')+'>'+
       '<div class="setback" onclick="closeExpPage()">'+ico("chevL",17)+' Exportar</div>'+p[5]+'</div>';
@@ -4820,9 +4837,11 @@ function mergeShared(remote){
     if(rm.aliases){ DB.sharedMeta.aliases=rm.aliases; }
     if(rm.places){ DB.sharedMeta.places=Object.assign({},DB.sharedMeta.places,rm.places); }
     if(rm.placeNames){ DB.sharedMeta.placeNames=Object.assign({},DB.sharedMeta.placeNames,rm.placeNames); }
-    if(rm.budgets){ DB.sharedMeta.budgets=rm.budgets; }
+    /* UNIÓN, no reemplazo: si el otro teléfono empuja su copia sin tu presupuesto
+       recién agregado, tu agregado sobrevive (borrar re-empuja el mapa y gana igual) */
+    if(rm.budgets){ DB.sharedMeta.budgets=Object.assign({},DB.sharedMeta.budgets,rm.budgets); }
     if(rm.budgetHist){ DB.sharedMeta.budgetHist=Object.assign({},DB.sharedMeta.budgetHist,rm.budgetHist); }
-    if(rm.budgetRoll){ DB.sharedMeta.budgetRoll=rm.budgetRoll; }
+    if(rm.budgetRoll){ DB.sharedMeta.budgetRoll=Object.assign({},DB.sharedMeta.budgetRoll,rm.budgetRoll); }
     if(typeof rm.defaultSplitP1==="number") DB.sharedMeta.defaultSplitP1=rm.defaultSplitP1;
     DB.sharedMeta.webhookUrl=rm.webhookUrl||DB.sharedMeta.webhookUrl;
     DB.sharedMeta.updatedAt=rm.updatedAt;
