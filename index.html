@@ -234,6 +234,25 @@ input:focus,textarea:focus,select:focus{outline:none;}
 .ncard.wait .nline{color:var(--dim);}
 .ncard .nline{font-size:14.5px;font-weight:600;color:var(--text);}
 .ncard .nsub{font-size:13px;color:var(--text);opacity:.74;margin-top:3px;line-height:1.4;}
+.padplus{width:54px;border-radius:16px;border:1.5px solid var(--line);background:var(--panel2);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .08s}
+.padplus:active{transform:scale(.94)}
+/* inputs nativos de fecha/hora/mes: cajitas legibles en ambos temas (iOS incluidos) */
+input[type=date],input[type=time],input[type=month]{background:var(--panel2);border:1.5px solid var(--line);color:var(--text);border-radius:12px;padding:10px 12px;min-height:46px;width:100%;font:inherit;font-size:15px;-webkit-appearance:none;appearance:none;color-scheme:light}
+[data-theme="dark"] input[type=date],[data-theme="dark"] input[type=time],[data-theme="dark"] input[type=month]{color-scheme:dark}
+input[type=date]::-webkit-date-and-time-value,input[type=month]::-webkit-date-and-time-value{text-align:left;color:var(--text)}
+/* menú estilo iOS para Ajustes/Exportar */
+.setmenu{background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow);margin-bottom:14px}
+.setmenu .mrow{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;border-bottom:1px solid var(--line)}
+.setmenu .mrow:last-child{border-bottom:none}
+.setmenu .mrow:active{background:var(--panel2)}
+.setmenu .mic2{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;flex:none}
+.setmenu .mtt{flex:1;min-width:0}
+.setmenu .mtt .t{font-weight:700;font-size:14.5px;color:var(--text)}
+.setmenu .mtt .s{font-size:12px;color:var(--faint);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.setmenu .chev{color:var(--faint);flex:none}
+.mgrouplbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:700;margin:4px 4px 8px}
+.setback{display:flex;align-items:center;gap:6px;color:var(--acc);font-weight:700;font-size:14.5px;cursor:pointer;margin-bottom:12px;width:max-content}
+
 .ncard .nsub b{opacity:1;}
 .ncard .nbtns{display:flex;gap:8px;margin-top:10px;}
 .ncard .nb{flex:1;border:none;border-radius:11px;padding:9px 0;font-size:13.5px;font-weight:700;cursor:pointer;}
@@ -643,8 +662,8 @@ html{scrollbar-gutter:stable;}
 @media (min-width:1100px){
   body.res #app,body.saldo #app,body.hist #app,body.exp #app,body.set #app{max-width:980px;}
   .only-mob{display:none;}
-  .setgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 20px;align-items:start;}
-  .setgrid>.sblk{break-inside:avoid;}
+  .setgrid{max-width:660px;margin:0 auto;}
+  .setgrid .setpage .sblk{break-inside:avoid;}
   .expgrid{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
   /* Registrar: teclado a la izquierda, contexto a la derecha (grid) */
   body.reg #app{max-width:980px;display:grid;grid-template-columns:minmax(0,560px) 340px;justify-content:center;
@@ -2110,7 +2129,7 @@ function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
 /* ===== estado ===== */
 var V={tab:"reg",prevTab:"reg",mode:"Gasto",amt:"",cat:null,
   account:DB.settings.lastAccount||"Cash",xferFrom:"BBVA Dr",xferTo:"Cash",
-  histMonth:E.todayISO().slice(0,7),histMode:"mes",histFrom:"",histTo:"",histScope:"all",resScope:"personal",expScope:"pend",expFrom:"",expTo:"",showTA_N:false,showTA_T:false,showTA_S:false,impTab:"normal",
+  histMonth:E.todayISO().slice(0,7),histMode:"mes",histFrom:"",histTo:"",histScope:"all",histCat:"",histAcct:"",setPage:null,expPage:null,resScope:"personal",expScope:"pend",expFrom:"",expTo:"",showTA_N:false,showTA_T:false,showTA_S:false,impTab:"normal",
   resMonth:E.todayISO().slice(0,7),resKind:"Egreso",resPeriod:"mes",resDim:"cat",resFrom:"",resTo:"",resView:"bars",resCalMonth:E.todayISO().slice(0,7),
   budScope:"personal",budPeriod:"mes",budFrom:"",budTo:"",resMore:false};
 
@@ -2131,6 +2150,7 @@ var IC={
   copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
   send:'<path d="M4 12l16-7-7 16-2-6z"/>',
   check:'<path d="M4 12l5 5L20 6"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
   star:'<path d="M12 3l2.6 5.3 5.8.85-4.2 4.1 1 5.75L12 17l-5.2 2.6 1-5.75-4.2-4.1 5.8-.85z"/>',
   xfer:'<path d="M4 8h13M14 5l3 3-3 3M20 16H7M10 13l-3 3 3 3"/>',
   down:'<path d="M12 4v11M8 11l4 4 4-4"/><path d="M5 19.5h14"/>',
@@ -2231,7 +2251,8 @@ function viewReg(){
       '</div>'+
       chips+
       '<div class="pad">'+pad+'</div>'+
-      '<button class="btn primary" onclick="quickSave()">'+ico("check",20)+' Guardar</button>'+
+      '<div style="display:flex;gap:10px;align-items:stretch"><button class="btn primary" style="flex:1" onclick="quickSave()">'+ico("check",20)+' Guardar</button>'+
+      '<button class="padplus" title="Tarjeta completa" onclick="openSheetFromPad()">'+ico("plus",22)+'</button></div>'+
     '</div>'+
     '<aside class="reg-side">'+regSideHTML()+'</aside>';
 }
@@ -2357,7 +2378,7 @@ function quickSave(){
   if(amt<=0){
     var nl=document.getElementById("nlText");
     if(nl && nl.value.trim()){ interpret(); return; }   // procesa lo dictado/escrito
-    toast("Escribe un monto o dicta"); return;
+    openSheetFromPad(); return;                          // vacío → tarjeta en blanco
   }
   if(V.mode==="Transferencia"){
     if(V.xferFrom===V.xferTo){ toast("Elige cuentas distintas"); return; }
@@ -2418,15 +2439,42 @@ function openSheetFromPad(){
 /* ============ SALDO ============ */
 function viewSaldo(){
   var b=balance(),mIso=E.todayISO().slice(0,7),t=cashTotalsMine(mIso+"-01",mIso+"-31");
-  var main='<div class="card bigbal"><div class="lbl">Efectivo en mano</div><div class="v'+(b<0?" neg":"")+'">'+esc(money(b))+'</div></div>'+
+  var pend=E.activeEntries(DB.entries).filter(function(e){return !e.exported;}).length;
+  var main='<div class="card bigbal" onclick="reconcile()"><div class="lbl">Efectivo en mano · toca para cuadrar</div><div class="v'+(b<0?" neg":"")+'">'+esc(money(b))+'</div></div>'+
     '<div class="twocol"><div class="card"><div class="k">Entró (mes)</div><div class="val in">'+esc(money(t.inn))+'</div></div>'+
     '<div class="card"><div class="k">Salió (mes)</div><div class="val out">'+esc(money(t.out))+'</div></div></div>'+
-    '<div class="sechead"><h3>Últimos movimientos</h3></div>'+ recentList(12);
+    upcomingRecurringCard()+budgetPulseCard();
   var side=ratMiniCard()+msiMiniCard()+
+    (pend?'<div class="card ratmini" onclick="go(\'exp\')"><div class="ic" style="color:var(--acc)">'+ico("copy",18)+'</div><div class="mid"><div class="t">Por exportar</div><div class="s">'+pend+' movimientos pendientes</div></div><div class="chev" style="color:var(--faint)">'+ico("chevR",16)+'</div></div>':'')+
     '<button class="btn ghost" onclick="reconcile()">Cuadrar efectivo con lo que traigo</button>'+
     '<div style="height:10px"></div>'+
     '<button class="btn ghost" onclick="editStart()">Saldo inicial ('+esc(money(DB.settings.startingBalance))+')</button>';
   return header()+pendingBannerHTML()+syncWarnHTML()+ deskGrid(main,side);
+}
+/* próximos cargos recurrentes (los 5 más cercanos) */
+function upcomingRecurringCard(){
+  var rec=(DB.settings.recurring||[]).filter(function(r){return r&&!r.paused&&r.next;})
+    .sort(function(a,b){return a.next<b.next?-1:1;}).slice(0,5);
+  if(!rec.length) return "";
+  var rows=rec.map(function(r){
+    var t=r.template||{}, nm=t.details||t.category||(t.kind==="transfer"?"Transferencia":"Recurrente");
+    return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:13.5px;margin-top:8px">'+
+      '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(nm)+'</span>'+
+      '<span style="white-space:nowrap;color:var(--dim)">'+esc(dayLabel(r.next))+' · '+esc(money(t.amount||0))+'</span></div>';
+  }).join("");
+  return '<div class="card" style="margin-top:2px"><div class="k">Próximos recurrentes</div>'+rows+'</div>';
+}
+/* pulso de presupuestos del mes: los 3 más consumidos */
+function budgetPulseCard(){
+  var m=curMonth(), bm=budgetMap("personal"), cats=Object.keys(bm||{}).filter(function(c){return bm[c]>0;});
+  if(!cats.length) return "";
+  var rows=cats.map(function(c){ var sp=spentInMonth("personal",c,m); return {c:c,sp:sp,lim:bm[c],pct:sp/bm[c]}; })
+    .sort(function(a,b){return b.pct-a.pct;}).slice(0,3);
+  return '<div class="card" style="margin-top:2px"><div class="k">Presupuestos del mes</div>'+rows.map(function(r){
+    var pct=Math.min(100,Math.round(100*r.pct));
+    return '<div style="margin-top:9px"><div style="display:flex;justify-content:space-between;font-size:13px"><span>'+esc(r.c)+'</span><span style="color:var(--dim)">'+esc(money(r.sp))+' / '+esc(money(r.lim))+'</span></div>'+
+      '<div style="height:5px;border-radius:4px;background:var(--line);margin-top:5px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(pct>=100?"var(--bad,#e66)":"var(--acc)")+'"></div></div></div>';
+  }).join("")+'</div>';
 }
 /* ---- MSI activos ---- */
 function monthDiff(a,b){ return (+b.slice(0,4)-(+a.slice(0,4)))*12 + (+b.slice(5,7)-(+a.slice(5,7))); }
@@ -2630,8 +2678,20 @@ function viewHist(){
         '<input type="month" id="histMonthIn" value="'+esc(V.histMonth)+'" oninput="V.histMonth=this.value;render()"></label></h3>'+
       '<div class="nav"><button style="width:auto;padding:0 10px;font-size:12px" onclick="V.histMode=\'rango\';render()">Rango</button>'+
         '<button onclick="shiftMonth(-1)">'+ico("chevL",18)+'</button><button onclick="shiftMonth(1)">'+ico("chevR",18)+'</button></div></div>';
+  /* filtros por categoría / cuenta (además del rango) */
+  if(V.histCat)  arr=arr.filter(function(e){ return e.kind!=="transfer" && e.category===V.histCat; });
+  if(V.histAcct) arr=arr.filter(function(e){ return e.account===V.histAcct || e.fromAccount===V.histAcct || e.toAccount===V.histAcct; });
+  if(!arr.length && (V.histCat||V.histAcct)) body='<div class="empty"><div class="big">Sin movimientos</div>Nada con esos filtros en este periodo.</div>';
+  else if(arr.length){ body=""; var last2="",ri2=0; arr.forEach(function(e){ if(e.date!==last2){ last2=e.date; body+='<div class="daygrp">'+esc(dayLabel(e.date))+'</div>'; } body+=entryRow(e,ri2++); }); }
+  var catOpts='<option value="">Categoría: todas</option>'+E.catList().map(function(c){return '<option value="'+esc(c)+'"'+(V.histCat===c?" selected":"")+'>'+esc(c)+'</option>';}).join("");
+  var acOpts='<option value="">Cuenta: todas</option>'+E.accounts().map(function(a){return '<option value="'+esc(a.name)+'"'+(V.histAcct===a.name?" selected":"")+'>'+esc(a.name)+'</option>';}).join("");
+  var filtRow='<div class="rangerow histfilters" style="margin-bottom:10px">'+
+    '<div class="field"><select onchange="V.histCat=this.value;render()">'+catOpts+'</select></div>'+
+    '<div class="field"><select onchange="V.histAcct=this.value;render()">'+acOpts+'</select></div>'+
+    ((V.histCat||V.histAcct)?'<button class="chip" style="align-self:center" onclick="V.histCat=\'\';V.histAcct=\'\';render()">✕</button>':'')+'</div>';
   var hasShared=E.activeEntries(DB.entries).some(function(e){return e.scope==="shared";});
   var scopeSeg=hasShared?('<div class="seg mini" style="margin-bottom:10px">'+[["all","Todo"],["personal","Personal"],["shared","Ratones"]].map(function(x){return '<button class="'+(V.histScope===x[0]?"on out":"")+'" onclick="V.histScope=\''+x[0]+'\';render()">'+x[1]+'</button>';}).join("")+'</div>'):"";
+  scopeSeg=filtRow+scopeSeg;
   var cards='<div class="twocol"><div class="card"><div class="k">Efectivo entró</div><div class="val in">'+esc(money(t.inn))+'</div></div>'+
     '<div class="card"><div class="k">Efectivo salió</div><div class="val out">'+esc(money(t.out))+'</div></div></div>';
   return header()+head+ deskGrid(scopeSeg+body, cards+'<div class="dsp"></div>'+dashSideHTML(true), cards);
@@ -3056,7 +3116,9 @@ function viewExport(){
   var tsvS=E.tsvShared(arrSh,names(),false);
   var nN=tsvN?tsvN.split("\n").length:0, nT=tsvT?tsvT.split("\n").length:0, nS=tsvS?tsvS.split("\n").length:0;
   var hasShared=E.activeEntries(DB.entries).some(function(e){return e.scope==="shared";});
-  return header("Exportar")+
+  var pend=E.activeEntries(DB.entries).filter(function(e){return !e.exported;}).length;
+  var pagesX=[
+    ["mov","Exportar movimientos",(pend?pend+" pendientes":"al día"),"#7c6cf0","copy", 
     '<div class="seg">'+seg+'</div>'+ rangeUI+'<div class="expgrid">'+
     '<div class="card" style="margin-top:12px"><p style="margin:0;color:var(--dim);font-size:13px;line-height:1.5">Pega directo en tu hoja. <b style="color:var(--bone)">Cuentas normales</b> abajo y <b style="color:var(--bone)">TDC</b> aparte, cada una en el orden de tus columnas.</p></div>'+
     '<div class="sechead" style="margin-top:6px"><h3>Cuentas normales · '+nN+'</h3>'+
@@ -3079,23 +3141,37 @@ function viewExport(){
     ):"")+
     '</div>'+
     '<div style="height:10px"></div>'+
-    '<button class="btn ghost mini" onclick="markExported()">'+ico("check",17)+' Marcar como exportados</button>'+
-    '<div class="sblk" style="margin-top:16px"><h3>Google Sheets (opcional)</h3>'+
+    '<button class="btn ghost mini" onclick="markExported()">'+ico("check",17)+' Marcar como exportados</button>'],
+    ["sheets","Google Sheets automático",(DB.settings.webhookUrl?"conectado":"configura tu URL"),"#10b981","send", '<div class="sblk" style="margin-top:16px"><h3>Google Sheets (opcional)</h3>'+
       '<p>Manda los pendientes solitos: tus cuentas al sheet personal (pestañas «Cashy» y «TDC») y lo conjunto al sheet Ratones.</p>'+
       '<div class="field"><div class="fl">Sheet personal</div><input id="whUrl" placeholder="https://script.google.com/…/exec" value="'+esc(DB.settings.webhookUrl)+'"></div>'+
       '<div class="field"><div class="fl">Sheet Ratones (compartido)</div><input id="whUrlS" placeholder="https://script.google.com/…/exec" value="'+esc(DB.sharedMeta.webhookUrl||"")+'"></div>'+
       '<div style="display:flex;gap:10px"><button class="btn ghost mini" style="flex:1" onclick="saveWebhook()">Guardar URLs</button>'+
       '<button class="btn ghost mini" style="flex:1" onclick="sendWebhook()">'+ico("send",16)+' Enviar pendientes</button></div>'+
-      '<div class="sync-line" id="whMsg"></div></div>'+
-    '<div class="sblk" style="margin-top:12px"><h3>Importar historial</h3>'+
+      '<div class="sync-line" id="whMsg"></div></div>'],
+    ["imp","Importar historial","pega renglones de tu hoja","#f59e0b","down", '<div class="sblk" style="margin-top:12px"><h3>Importar historial</h3>'+
       '<p>Trae tus movimientos desde tu hoja: copia los renglones (con o sin encabezado, TSV o CSV) y pégalos aquí, o elige un archivo. Elige de qué pestaña vienen. Se marcan como <b style="color:var(--bone)">ya exportados</b> y los duplicados exactos se saltan.</p>'+
       '<div class="seg"><button class="'+(V.impTab!=="tdc"?"on out":"")+'" onclick="V.impTab=\'normal\';render()">Cuentas normales</button><button class="'+(V.impTab==="tdc"?"on out":"")+'" onclick="V.impTab=\'tdc\';render()">TDC</button></div>'+
       '<textarea id="impTA" class="imp-ta" style="margin-top:10px" placeholder="Date\tAmount\tTransaction\t… (pega aquí)"></textarea>'+
       '<div style="display:flex;gap:10px;margin-top:10px"><button class="btn ghost mini" style="flex:1" onclick="document.getElementById(\'impFile\').click()">Elegir archivo…</button>'+
       '<button class="btn primary mini" style="flex:1" onclick="runImport()">'+ico("down",16)+' Importar</button></div>'+
       '<input type="file" id="impFile" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" class="hide" onchange="importFile(event)">'+
-      '<div class="sync-line" id="impMsg"></div></div>';
+      '<div class="sync-line" id="impMsg"></div></div>']
+  ];
+  var activeX=V.expPage&&pagesX.some(function(p){return p[0]===V.expPage;})?V.expPage:null;
+  var menuX='<div'+(activeX?' hidden':'')+'><div class="setmenu">'+pagesX.map(function(p){
+    return '<div class="mrow" onclick="openExpPage(\''+p[0]+'\')"><div class="mic2" style="background:'+p[3]+'">'+ico(p[4],17)+'</div>'+
+      '<div class="mtt"><div class="t">'+esc(p[1])+'</div><div class="s">'+esc(p[2])+'</div></div><div class="chev">'+ico("chevR",17)+'</div></div>';
+  }).join("")+'</div></div>';
+  var bodyX=pagesX.map(function(p){
+    return '<div class="setpage"'+(activeX===p[0]?'':' hidden')+'>'+
+      '<div class="setback" onclick="closeExpPage()">'+ico("chevL",17)+' Exportar</div>'+p[5]+'</div>';
+  }).join("");
+  return header("Exportar")+menuX+bodyX;
 }
+function openExpPage(id){ V.expPage=id; render(); window.scrollTo(0,0); }
+function closeExpPage(){ V.expPage=null; render(); }
+
 function copyExp(tab,n){
   var arr=scopeEntries().filter(exportMine); var text=E.tsvForTab(arr,tab,false);
   if(!text){ toast("Nada para copiar"); return; }
@@ -3436,33 +3512,54 @@ function fmtMonth(m){ var d=new Date(+m.slice(0,4), +m.slice(5,7)-1, 1); var t=d
 function toggleSimpleForm(){ DB.settings.simpleForm=!DB.settings.simpleForm; save(); buzz(6); render(); }
 function togglePrivacy(){ DB.settings.hideAmts=!DB.settings.hideAmts; save(); buzz(6); render(); }
 function viewSettings(){
-  return header("Ajustes",true)+'<div class="setgrid">'+
-    appearanceBlock()+
-    syncBlock()+
-    ratonesBlock()+
-    accentBlock()+
-    lockBlock()+
-    '<div class="sblk"><h3>Efectivo</h3><div class="field"><div class="fl">Saldo inicial</div><input id="stBal" inputmode="decimal" value="'+esc(DB.settings.startingBalance)+'"></div><button class="btn ghost mini" onclick="saveStart()">Guardar saldo inicial</button></div>'+
-    '<div class="sblk"><h3>Atajos y Siri</h3><p>Registra sin abrir la app: crea un <b>Atajo</b> de iOS con la acción <b>Dictar texto</b> seguida de <b>Abrir URL</b> apuntando a:</p>'+
-      '<div class="codebox" style="user-select:all">'+esc((location.origin+location.pathname).replace(/index\.html$/,""))+'?q=[Texto dictado]</div>'+
-      '<p style="font-size:12px;color:var(--faint)">Sustituye [Texto dictado] por la variable del atajo. Dile a Siri el nombre del atajo (ej. "Cashy") y dicta: «200 tacos», «le di 500 a ratona»… El dictado queda <b>en cola</b> en la campana; lo confirmas con un tap cuando quieras (nada entra al historial sin tu ok).</p>'+
-      '<p style="font-size:12px;color:var(--faint)"><b>Importante (una sola vez):</b> iOS abre el atajo en <b>Safari</b>, que es una instancia separada de la app instalada. La primera vez que corras el atajo, en esa pestaña de Safari elige tu perfil e <b>inicia sesión</b> con tu misma cuenta. A partir de ahí, lo que dictes en Safari se sincroniza y aparece en la campana de tu app instalada.</p></div>'+
-    '<div class="sblk"><h3>Recordatorio</h3><p>iOS no permite avisos programados confiables en apps web. Lo seguro: un <b>Atajo</b> que a esta hora abra Cashy.</p>'+
-      '<div class="field"><div class="fl">Hora</div><input id="remTime" type="time" value="'+esc(DB.settings.reminderTime)+'"></div>'+
-      '<div style="display:flex;gap:10px"><button class="btn ghost mini" style="flex:1" onclick="saveRem()">Guardar hora</button><button class="btn ghost mini" style="flex:1" onclick="testNotif()">Probar aviso</button></div>'+
-      '<details class="foldable" style="margin-top:12px"><summary>Cómo crear el Atajo</summary><p style="margin-top:8px">Atajos → Automatización → Crear → Hora del día → tu hora + Diariamente → acción Abrir app → Cashy.</p></details></div>'+
-    tripBlock()+
-    accountsBlock()+
-    recurringBlock()+
-    recPackBlock()+
-    categoriesBlock()+
-    catETBlock()+
-    customRulesBlock()+
-    learnBlock()+
-    '<div class="sblk"><h3>Respaldo</h3><p>Descarga o restaura todos tus datos.</p><div style="display:flex;gap:10px"><button class="btn ghost mini" style="flex:1" onclick="backup()">'+ico("down",16)+' Descargar</button><button class="btn ghost mini" style="flex:1" onclick="document.getElementById(\'imp\').click()">Importar</button></div><input type="file" id="imp" accept="application/json" class="hide" onchange="importBackup(event)"></div>'+
-    supaBlock()+
+  var pages=[
+    ["general","Apariencia y tema","#7c6cf0","res", appearanceBlock()+accentBlock()],
+    ["viaje","Modo viaje","#0ea5e9","send", tripBlock()],
+    ["cuentas","Cuentas y tarjetas","#f59e0b","saldo", accountsBlock()],
+    ["recurrentes","Recurrentes","#10b981","cal", recurringBlock()+recPackBlock()],
+    ["categorias","Categorías","#ef4444","hist", categoriesBlock()+catETBlock()],
+    ["diccionario","Diccionario y aprendizaje","#8b5cf6","mic", customRulesBlock()+learnBlock()],
+    ["ratones","Ratones (pareja)","#ec4899","mouse", ratonesBlock()],
+    ["sync","Sincronización y cuenta","#06b6d4","reg", syncBlock()+supaBlock()],
+    ["siri","Atajos y Siri","#64748b","mic", siriSetBlock()],
+    ["recordatorio","Recordatorio","#f97316","cal", reminderSetBlock()],
+    ["efectivo","Efectivo (saldo inicial)","#22c55e","saldo", cashSetBlock()],
+    ["seguridad","Seguridad","#334155","lock", lockBlock()],
+    ["respaldo","Respaldo de datos","#a855f7","down", backupSetBlock()]
+  ];
+  var groups=[["General",["general","efectivo","seguridad"]],
+              ["Registro",["viaje","cuentas","recurrentes","categorias","diccionario"]],
+              ["Conexión",["ratones","sync","siri","recordatorio"]],
+              ["Datos",["respaldo"]]];
+  var byId={}; pages.forEach(function(p){ byId[p[0]]=p; });
+  var active=V.setPage&&byId[V.setPage]?V.setPage:null;
+  var menu='<div'+(active?' hidden':'')+'>'+groups.map(function(g){
+    return '<div class="mgrouplbl">'+g[0]+'</div><div class="setmenu">'+g[1].map(function(id){
+      var p=byId[id];
+      return '<div class="mrow" onclick="openSetPage(\''+id+'\')"><div class="mic2" style="background:'+p[2]+'">'+ico(p[3],17)+'</div>'+
+        '<div class="mtt"><div class="t">'+esc(p[1])+'</div></div><div class="chev">'+ico("chevR",17)+'</div></div>';
+    }).join("")+'</div>';
+  }).join("")+'</div>';
+  var pagesHTML=pages.map(function(p){
+    return '<div class="setpage"'+(active===p[0]?'':' hidden')+'>'+
+      '<div class="setback" onclick="closeSetPage()">'+ico("chevL",17)+' Ajustes</div>'+
+      '<div class="sechead" style="margin-top:0"><h3>'+esc(p[1])+'</h3></div>'+p[4]+'</div>';
+  }).join("");
+  return header("Ajustes",true)+'<div class="setgrid">'+menu+pagesHTML+
     '</div><div style="text-align:center;color:var(--faint);font-size:12px;margin:18px 0 8px">Cashy · sin fricción</div>';
 }
+function openSetPage(id){ V.setPage=id; render(); window.scrollTo(0,0); }
+function closeSetPage(){ V.setPage=null; render(); }
+function cashSetBlock(){ return '<div class="sblk"><h3>Efectivo</h3><div class="field"><div class="fl">Saldo inicial</div><input id="stBal" inputmode="decimal" value="'+esc(DB.settings.startingBalance)+'"></div><button class="btn ghost mini" onclick="saveStart()">Guardar saldo inicial</button></div>'; }
+function siriSetBlock(){ return '<div class="sblk"><h3>Atajos y Siri</h3><p>Registra sin abrir la app: crea un <b>Atajo</b> de iOS con la acción <b>Dictar texto</b> seguida de <b>Abrir URL</b> apuntando a:</p>'+
+      '<div class="codebox" style="user-select:all">'+esc((location.origin+location.pathname).replace(/index\.html$/,""))+'?q=[Texto dictado]</div>'+
+      '<p style="font-size:12px;color:var(--faint)">Sustituye [Texto dictado] por la variable del atajo. En la acción «Dictar texto» pon <b>Detener escucha: Al tocar</b> para dictar sin límite. Dile a Siri el nombre del atajo (ej. "Cashy") y dicta: «200 tacos», «le di 500 a ratona»… El dictado queda <b>en cola</b> en la campana; lo confirmas con un tap (nada entra sin tu ok).</p>'+
+      '<p style="font-size:12px;color:var(--faint)"><b>Importante (una sola vez):</b> iOS abre el atajo en <b>Safari</b>, instancia separada de la app instalada. La primera vez, en esa pestaña de Safari elige tu perfil e <b>inicia sesión</b>. De ahí en adelante lo dictado se sincroniza a la campana de tu app.</p></div>'; }
+function reminderSetBlock(){ return '<div class="sblk"><h3>Recordatorio</h3><p>iOS no permite avisos programados confiables en apps web. Lo seguro: un <b>Atajo</b> que a esta hora abra Cashy.</p>'+
+      '<div class="field"><div class="fl">Hora</div><input id="remTime" type="time" value="'+esc(DB.settings.reminderTime)+'"></div>'+
+      '<div style="display:flex;gap:10px"><button class="btn ghost mini" style="flex:1" onclick="saveRem()">Guardar hora</button><button class="btn ghost mini" style="flex:1" onclick="testNotif()">Probar aviso</button></div>'+
+      '<details class="foldable" style="margin-top:12px"><summary>Cómo crear el Atajo</summary><p style="margin-top:8px">Atajos → Automatización → Crear → Hora del día → tu hora + Diariamente → acción Abrir app → Cashy.</p></details></div>'; }
+function backupSetBlock(){ return '<div class="sblk"><h3>Respaldo</h3><p>Descarga o restaura todos tus datos.</p><div style="display:flex;gap:10px"><button class="btn ghost mini" style="flex:1" onclick="backup()">'+ico("down",16)+' Descargar</button><button class="btn ghost mini" style="flex:1" onclick="document.getElementById(\'imp\').click()">Importar</button></div><input type="file" id="imp" accept="application/json" class="hide" onchange="importBackup(event)"></div>'; }
 function saveStart(){ var v=(document.getElementById("stBal")||{}).value,n=parseFloat(String(v).replace(/[^0-9.\-]/g,"")); if(isNaN(n)){toast("Monto no válido");return;} DB.settings.startingBalance=Math.round(n*100)/100; save(); toast("Guardado",true); }
 function saveRem(){ var v=(document.getElementById("remTime")||{}).value; if(v){ DB.settings.reminderTime=v; save(); toast("Hora guardada",true); } }
 function testNotif(){ if(!("Notification" in window)){ toast("Sin soporte de avisos"); return; } Notification.requestPermission().then(function(p){ if(p==="granted"){ try{new Notification("Cashy",{body:"Así se verá tu recordatorio de efectivo"}); toast("Aviso enviado",true);}catch(e){toast("iOS puede ocultarlo");} } else toast("Permiso denegado"); }); }
