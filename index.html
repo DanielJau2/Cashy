@@ -90,7 +90,10 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 
 /* cambio de tema: crossfade nativo (View Transitions); sin transiciones por-elemento (causaban lag) */
 ::view-transition-old(root),::view-transition-new(root){animation-duration:.26s;}
-button{font-family:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0;}
+button,input,select,textarea{font-family:inherit;}
+button{color:inherit;background:none;border:none;cursor:pointer;padding:0;}
+.histfilters select{-webkit-appearance:none;appearance:none;background:var(--panel2);border:1.5px solid var(--line);color:var(--dim);border-radius:12px;padding:9px 30px 9px 12px;font-size:13px;width:100%;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.histfilters .field{margin-bottom:0}
 input,textarea,select{font-family:inherit;color:inherit;max-width:100%;}
 input:focus,textarea:focus,select:focus{outline:none;}
 ::placeholder{color:var(--faint);}
@@ -189,7 +192,7 @@ input:focus,textarea:focus,select:focus{outline:none;}
 .bigbal .v.neg{color:#ffd9d4;}
 .twocol{display:flex;gap:12px;margin-bottom:12px;}
 .twocol .card{flex:1;margin:0;text-align:center;padding:16px 10px;}
-.twocol .k{font-size:11px;color:var(--faint);letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px;font-weight:700;}
+.twocol .k,.card>.k{font-size:11px;color:var(--faint);letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px;font-weight:700;}
 .twocol .val{font-family:var(--fd);font-weight:800;font-size:24px;letter-spacing:-.02em;}
 .twocol .val.in{color:var(--green);} .twocol .val.out{color:var(--red);}
 .sechead{display:flex;align-items:center;justify-content:space-between;margin:18px 2px 10px;}
@@ -216,6 +219,7 @@ input:focus,textarea:focus,select:focus{outline:none;}
 /* fields */
 .field{margin-bottom:12px;}
 .field .fl{font-size:11px;color:var(--dim);letter-spacing:.05em;margin-bottom:6px;text-transform:uppercase;font-weight:700;}
+.field select{-webkit-appearance:none;appearance:none;min-height:46px;font-size:15px;background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:34px;}
 .field input,.field textarea,.field select{width:100%;background:var(--panel2);border:1px solid var(--line);
   border-radius:14px;padding:12px 13px;font-size:15px;color:var(--text);}
 .field textarea{min-height:50px;resize:vertical;line-height:1.5;}
@@ -236,7 +240,7 @@ input:focus,textarea:focus,select:focus{outline:none;}
 .ncard .nsub{font-size:13px;color:var(--text);opacity:.74;margin-top:3px;line-height:1.4;}
 .saverow{display:flex;gap:10px;align-items:stretch}
 .saverow .btn.primary{flex:1;width:auto;margin:0}
-.saverow .padplus{flex:none;width:64px;padding:0;display:flex;align-items:center;justify-content:center}
+.saverow .btn.primary.padplus{flex:0 0 64px;width:64px;padding:0;display:flex;align-items:center;justify-content:center}
 /* inputs nativos de fecha/hora/mes: cajitas legibles en ambos temas (iOS incluidos) */
 input[type=date],input[type=time],input[type=month]{background:var(--panel2);border:1.5px solid var(--line);color:var(--text);border-radius:12px;padding:10px 12px;min-height:46px;width:100%;font:inherit;font-size:15px;-webkit-appearance:none;appearance:none;color-scheme:light}
 [data-theme="dark"] input[type=date],[data-theme="dark"] input[type=time],[data-theme="dark"] input[type=month]{color-scheme:dark}
@@ -252,7 +256,7 @@ input[type=date]::-webkit-date-and-time-value,input[type=month]::-webkit-date-an
 .setmenu .mtt .s{font-size:12px;color:var(--faint);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .setmenu .chev{color:var(--faint);flex:none}
 .mgrouplbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:700;margin:4px 4px 8px}
-.pavatar{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--acc),#9f8cff);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:19px;flex:none}
+.pavatar{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--acc),#9f8cff);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:19px;flex:none}
 .profcard .mrow:active{background:var(--panel)}
 .setback{display:flex;align-items:center;gap:6px;color:var(--acc);font-weight:700;font-size:14.5px;cursor:pointer;margin-bottom:12px;width:max-content}
 
@@ -2465,7 +2469,7 @@ function upcomingRecurringCard(){
       '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(nm)+'</span>'+
       '<span style="white-space:nowrap;color:var(--dim)">'+esc(dayLabel(r.next))+' · '+esc(money(t.amount||0))+'</span></div>';
   }).join("");
-  return '<div class="card" style="margin-top:2px"><div class="k">Próximos recurrentes</div>'+rows+'</div>';
+  return '<div class="card" style="margin-top:2px"><div class="k" style="font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);font-weight:700;margin-bottom:6px">Próximos recurrentes</div>'+rows+'</div>';
 }
 /* pulso de presupuestos del mes: los 3 más consumidos */
 function budgetPulseCard(){
@@ -2473,7 +2477,7 @@ function budgetPulseCard(){
   if(!cats.length) return "";
   var rows=cats.map(function(c){ var sp=spentInMonth("personal",c,m); return {c:c,sp:sp,lim:bm[c],pct:sp/bm[c]}; })
     .sort(function(a,b){return b.pct-a.pct;}).slice(0,3);
-  return '<div class="card" style="margin-top:2px"><div class="k">Presupuestos del mes</div>'+rows.map(function(r){
+  return '<div class="card" style="margin-top:2px"><div class="k" style="font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);font-weight:700;margin-bottom:6px">Presupuestos del mes</div>'+rows.map(function(r){
     var pct=Math.min(100,Math.round(100*r.pct));
     return '<div style="margin-top:9px"><div style="display:flex;justify-content:space-between;font-size:13px"><span>'+esc(r.c)+'</span><span style="color:var(--dim)">'+esc(money(r.sp))+' / '+esc(money(r.lim))+'</span></div>'+
       '<div style="height:5px;border-radius:4px;background:var(--line);margin-top:5px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(pct>=100?"var(--bad,#e66)":"var(--acc)")+'"></div></div></div>';
@@ -3126,7 +3130,7 @@ function viewExport(){
   var hasShared=E.activeEntries(DB.entries).some(function(e){return e.scope==="shared";});
   var pend=E.activeEntries(DB.entries).filter(function(e){return !e.exported;}).length;
   var pagesX=[
-    ["mov","Exportar movimientos",(pend?pend+" pendientes":"al día"),"#7c6cf0","copy", 
+    ["mov","Exportar movimientos",(pend?pend+" pendientes":"Al día"),"#7c6cf0","copy", 
     '<div class="seg">'+seg+'</div>'+ rangeUI+'<div class="expgrid">'+
     '<div class="card" style="margin-top:12px"><p style="margin:0;color:var(--dim);font-size:13px;line-height:1.5">Pega directo en tu hoja. <b style="color:var(--bone)">Cuentas normales</b> abajo y <b style="color:var(--bone)">TDC</b> aparte, cada una en el orden de tus columnas.</p></div>'+
     '<div class="sechead" style="margin-top:6px"><h3>Cuentas normales · '+nN+'</h3>'+
@@ -3150,14 +3154,14 @@ function viewExport(){
     '</div>'+
     '<div style="height:10px"></div>'+
     '<button class="btn ghost mini" onclick="markExported()">'+ico("check",17)+' Marcar como exportados</button>'],
-    ["sheets","Google Sheets automático",(DB.settings.webhookUrl?"conectado":"configura tu URL"),"#10b981","send", '<div class="sblk" style="margin-top:16px"><h3>Google Sheets (opcional)</h3>'+
+    ["sheets","Google Sheets automático",(DB.settings.webhookUrl?"Conectado":"Configura tu URL"),"#10b981","send", '<div class="sblk" style="margin-top:16px"><h3>Google Sheets (opcional)</h3>'+
       '<p>Manda los pendientes solitos: tus cuentas al sheet personal (pestañas «Cashy» y «TDC») y lo conjunto al sheet Ratones.</p>'+
       '<div class="field"><div class="fl">Sheet personal</div><input id="whUrl" placeholder="https://script.google.com/…/exec" value="'+esc(DB.settings.webhookUrl)+'"></div>'+
       '<div class="field"><div class="fl">Sheet Ratones (compartido)</div><input id="whUrlS" placeholder="https://script.google.com/…/exec" value="'+esc(DB.sharedMeta.webhookUrl||"")+'"></div>'+
       '<div style="display:flex;gap:10px"><button class="btn ghost mini" style="flex:1" onclick="saveWebhook()">Guardar URLs</button>'+
       '<button class="btn ghost mini" style="flex:1" onclick="sendWebhook()">'+ico("send",16)+' Enviar pendientes</button></div>'+
       '<div class="sync-line" id="whMsg"></div></div>'],
-    ["imp","Importar historial","pega renglones de tu hoja","#f59e0b","down", '<div class="sblk" style="margin-top:12px"><h3>Importar historial</h3>'+
+    ["imp","Importar historial","Pega renglones de tu hoja","#f59e0b","down", '<div class="sblk" style="margin-top:12px"><h3>Importar historial</h3>'+
       '<p>Trae tus movimientos desde tu hoja: copia los renglones (con o sin encabezado, TSV o CSV) y pégalos aquí, o elige un archivo. Elige de qué pestaña vienen. Se marcan como <b style="color:var(--bone)">ya exportados</b> y los duplicados exactos se saltan.</p>'+
       '<div class="seg"><button class="'+(V.impTab!=="tdc"?"on out":"")+'" onclick="V.impTab=\'normal\';render()">Cuentas normales</button><button class="'+(V.impTab==="tdc"?"on out":"")+'" onclick="V.impTab=\'tdc\';render()">TDC</button></div>'+
       '<textarea id="impTA" class="imp-ta" style="margin-top:10px" placeholder="Date\tAmount\tTransaction\t… (pega aquí)"></textarea>'+
@@ -3169,7 +3173,7 @@ function viewExport(){
   var activeX=V.expPage&&pagesX.some(function(p){return p[0]===V.expPage;})?V.expPage:null;
   var nm=names()[prof()]||"", other=names()[prof()==="p1"?"p2":"p1"]||"";
   var rol=(prof()==="p1")?"Ratón":"Ratona";
-  var profCard='<div class="setmenu profcard"><div class="mrow" style="cursor:default;padding:16px">'+
+  var profCard='<div class="setmenu profcard"><div class="mrow" style="cursor:default;padding:26px 18px">'+
     '<div class="pavatar">'+esc((nm||rol).trim().charAt(0).toUpperCase())+'</div>'+
     '<div class="mtt"><div class="t" style="font-size:16.5px">'+esc(nm||rol)+'</div>'+
     '<div class="s">Perfil '+rol+(other?(' · Ratones con '+esc(other)):'')+'</div></div></div></div>';
@@ -3178,7 +3182,7 @@ function viewExport(){
       '<div class="mtt"><div class="t">'+esc(p[1])+'</div><div class="s">'+esc(p[2])+'</div></div><div class="chev">'+ico("chevR",17)+'</div></div>';
   }).join("")+
     '<div class="mrow" onclick="go(\'set\')"><div class="mic2" style="background:#64748b">'+ico("gear",17)+'</div>'+
-      '<div class="mtt"><div class="t">Ajustes</div><div class="s">cuentas, categorías, Ratones, sync…</div></div><div class="chev">'+ico("chevR",17)+'</div></div>'+
+      '<div class="mtt"><div class="t">Ajustes</div><div class="s">Cuentas, categorías, Ratones, sync…</div></div><div class="chev">'+ico("chevR",17)+'</div></div>'+
   '</div></div>';
   var bodyX=pagesX.map(function(p){
     return '<div class="setpage"'+(activeX===p[0]?'':' hidden')+'>'+
@@ -3370,11 +3374,14 @@ function setBudget(scope,cat,val){
 }
 /* presupuesto vigente en un mes: snapshot exacto, o el más reciente anterior, o el mapa vivo */
 function budgetForMonth(scope,month){
+  /* presente y futuro = mapa VIVO (así ningún snapshot pisado por un merge puede
+     esconder una fila recién agregada); los snapshots solo congelan meses pasados */
+  if(month>=curMonth()) return budgetMap(scope);
   var h=budgetHist(scope);
   if(h[month]) return h[month];
   var keys=Object.keys(h).filter(function(k){return k<=month;}).sort();
   if(keys.length) return h[keys[keys.length-1]];   /* hereda el snapshot anterior más cercano */
-  return (month>=curMonth())? budgetMap(scope) : {}; /* antes del primer snapshot no había presupuesto */
+  return {}; /* antes del primer snapshot no había presupuesto */
 }
 function monthsInRange(fromM,toM){
   var out=[], m=fromM;
@@ -4845,6 +4852,8 @@ function mergeShared(remote){
     if(typeof rm.defaultSplitP1==="number") DB.sharedMeta.defaultSplitP1=rm.defaultSplitP1;
     DB.sharedMeta.webhookUrl=rm.webhookUrl||DB.sharedMeta.webhookUrl;
     DB.sharedMeta.updatedAt=rm.updatedAt;
+    /* el snapshot del mes en curso se reconstruye del mapa vivo fusionado */
+    (DB.sharedMeta.budgetHist||(DB.sharedMeta.budgetHist={}))[curMonth()]=Object.assign({},DB.sharedMeta.budgets||{});
   }
 }
 function scheduleSync(){ if(!sb||!session) return; clearTimeout(pushTimer); syncMsg="Sincronizando…"; upSync(); pushTimer=setTimeout(function(){ pullRemote().then(pushRemote); },1500); }
@@ -4864,6 +4873,11 @@ function mergeDB(local,remote){
     })(),
     siriDone:(local.siriDone||[]).concat((remote.siriDone||[]).filter(function(id){return (local.siriDone||[]).indexOf(id)<0;})).slice(-200),
     updatedAt:Math.max(local.updatedAt||0,remote.updatedAt||0)};
+  /* CRÍTICO: sharedMeta debe SOBREVIVIR al pull personal. Antes se perdía aquí,
+     migrate() lo re-creaba vacío y mergeShared adoptaba el blob remoto viejo:
+     tu presupuesto Ratones recién guardado "desaparecía a los segunditos". */
+  var lsm=local.sharedMeta, rsm=remote.sharedMeta;
+  out.sharedMeta=(lsm&&rsm)?(((lsm.updatedAt||0)>=(rsm.updatedAt||0))?lsm:rsm):(lsm||rsm);
   out.settings.catET=Object.assign({},(remote.settings&&remote.settings.catET)||{},(local.settings&&local.settings.catET)||{});
   var le=local.entries||{},re=remote.entries||{},keys={};
   Object.keys(le).forEach(function(k){keys[k]=1;}); Object.keys(re).forEach(function(k){keys[k]=1;});
