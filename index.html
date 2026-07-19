@@ -1663,7 +1663,7 @@ var SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 var TABLE="cash_data";
 var TABLE_SHARED="shared_data", SHARED_ROW="ratones";
 var SYNC_ON=/^https:\/\/.+\.supabase\.co/.test(SUPABASE_URL)&&SUPABASE_ANON_KEY.length>30;
-var sb=null,session=null,applyingRemote=false,pushTimer=null,syncMsg="";
+var sb=null,session=null,authKnown=false,applyingRemote=false,pushTimer=null,syncMsg="";
 
 /* ===== storage ===== */
 var KEY="cashy_db_v1",SCHEMA=2;
@@ -2179,6 +2179,7 @@ var IC={
   line:'<path d="M3 16.5l5-5.5 4 3 6-7.5"/><path d="M3 20.5h18"/>',
   target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>',
   sliders:'<path d="M4 8h9M17.5 8H20M4 16h3.5M12 16h8"/><circle cx="15" cy="8" r="2"/><circle cx="9.5" cy="16" r="2"/>',
+  lock:'<rect x="5" y="10.5" width="14" height="9.5" rx="2.4"/><path d="M8.2 10.5V7.9a3.8 3.8 0 017.6 0v2.6"/><circle cx="12" cy="15.2" r="1.15" fill="currentColor" stroke="none"/>',
   cloudOff:'<path d="M4 4l16 16"/><path d="M7.5 18.5h9.3a4 4 0 0 0 1.9-.5M20.7 15a4 4 0 0 0-3.2-5.5A6 6 0 0 0 8 7.2M4.6 8.6A6 6 0 0 0 6 18.4"/>'
 };
 function ico(n,s){s=s||22;return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(IC[n]||"")+'</svg>';}
@@ -2200,6 +2201,7 @@ function render(){
   if(V.tab==="res") syncSegPill();
 }
 function go(tab){ if(tab===V.tab) return; if(tab==="set") V.prevTab=(V.tab==="set"?V.prevTab:V.tab); V.tab=tab; buzz(5); render(); }
+function goSync(){ if(V.tab!=="set") V.prevTab=V.tab; V.tab="set"; V.setPage="sync"; buzz(5); render(); window.scrollTo(0,0); }
 function back(){ V.tab=V.prevTab||"reg"; render(); }
 
 function header(title,withBack){
@@ -2213,8 +2215,13 @@ function header(title,withBack){
   var pc=notifCount(), pw=sentPendingByMe().length;
   var badge=pc?('<span class="nbadge">'+(pc>9?"9+":pc)+'</span>'):(pw?'<span class="nbadge dot"></span>':'');
   var bellBtn='<button class="iconbtn bellbtn" onclick="openNotifs()" aria-label="Notificaciones">'+ico("bell",18)+badge+'</button>';
+  /* sesión caída con datos en la app: nube tachada ámbar → un tap y a
+     reconectar. Sin esto, un token vencido te deja días registrando sin
+     respaldo en la nube y ni te enteras. */
+  var offBtn=(SYNC_ON&&authKnown&&!session&&DB.settings.profilePicked&&Object.keys(DB.entries).length>0)
+    ? '<button class="iconbtn cloudoffbtn" onclick="goSync()" aria-label="Sin sesión — reconectar" style="color:#f59e0b">'+ico("cloudOff",18)+'</button>' : '';
   return '<div class="head"><div class="lft">'+left+'</div>'+
-    '<div class="rgt">'+right+bellBtn+'<button class="iconbtn" onclick="go(\'set\')">'+ico("gear",19)+'</button></div></div>';
+    '<div class="rgt">'+right+offBtn+bellBtn+'<button class="iconbtn" onclick="go(\'set\')">'+ico("gear",19)+'</button></div></div>';
 }
 
 /* ============ REGISTRAR ============ */
@@ -2777,7 +2784,12 @@ document.addEventListener("click",function(e){
 },{passive:true});
 function dbSig(){ var n=0,mx=0,ks=Object.keys(DB.entries);
   for(var i=0;i<ks.length;i++){ var e=DB.entries[i<0?0:ks[i]]; if(!e) continue; n++; if(e.updatedAt>mx) mx=e.updatedAt; if(e.deleted) n+=7; }
-  return ks.length+"·"+mx+"·"+n+"·"+(DB.siriQueue||[]).length+"·"+((DB.sharedMeta&&DB.sharedMeta.updatedAt)||0); }
+  /* hash djb2 barato de settings: si un pull cambia presupuestos/recurrentes/
+     ajustes, la vista se entera (antes dbSig solo miraba entradas y el sync
+     podía restaurarte un presupuesto sin refrescar la pantalla) */
+  var s=JSON.stringify(DB.settings||{}), h=5381;
+  for(var j=0;j<s.length;j++){ h=((h<<5)+h+s.charCodeAt(j))|0; }
+  return ks.length+"·"+mx+"·"+n+"·"+(DB.siriQueue||[]).length+"·"+((DB.sharedMeta&&DB.sharedMeta.updatedAt)||0)+"·"+h; }
 function renderQuiet(){
   /* si estás escribiendo en un campo del área principal, el refresco del sync espera:
      re-renderizar aquí destruía el input del presupuesto a media captura */
@@ -4506,7 +4518,22 @@ function reviewEntry(id){ var s=doReview(id); render();
 function rejectEntry(id){ if(!confirm("¿Rechazar? Se quitará para ambos.")) return; var s=doReject(id); render();
   toast("Se quitó para ambos",false,{label:"Deshacer",fn:function(){ undoReject(id,s); }}); }
 function backup(){ var blob=new Blob([JSON.stringify(DB,null,2)],{type:"application/json"}); var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="cashy-respaldo-"+E.todayISO()+".json"; a.click(); setTimeout(function(){URL.revokeObjectURL(a.href);},1000); }
-function importBackup(ev){ var f=ev.target.files&&ev.target.files[0]; if(!f) return; var r=new FileReader(); r.onload=function(){ try{ var d=JSON.parse(r.result); if(!d||!d.entries){ alert("No es un respaldo válido de Cashy."); return; } DB=migrate(mergeDB(DB,d)); applyConfig(); save(); render(); toast("Importado",true); }catch(e){ alert("No se pudo leer el archivo."); } }; r.readAsText(f); }
+function importBackup(ev){ var f=ev.target.files&&ev.target.files[0]; if(!f) return; var r=new FileReader(); r.onload=function(){ try{ var d=JSON.parse(r.result); if(!d||!d.entries){ alert("No es un respaldo válido de Cashy."); return; } DB=migrate(mergeDB(DB,d)); restoreFromBackup(d); applyConfig(); save(); render(); toast("Importado",true); }catch(e){ alert("No se pudo leer el archivo."); } }; r.readAsText(f); }
+/* un respaldo importado A MANO siempre aporta lo suyo por unión (prioridad a lo
+   actual): recuperar presupuestos/recurrentes/palabras/colores de un JSON viejo
+   funciona de verdad, sin pisar lo que ya tienes hoy */
+function restoreFromBackup(d){
+  var bs=(d&&d.settings)||{}, s=DB.settings;
+  s.budgets=Object.assign({},bs.budgets||{},s.budgets);
+  s.budgetRoll=Object.assign({},bs.budgetRoll||{},s.budgetRoll);
+  s.accountColors=Object.assign({},bs.accountColors||{},s.accountColors);
+  s.budgetHist=Object.assign({},bs.budgetHist||{},s.budgetHist);
+  s.budgetHist[curMonth()]=Object.assign({},s.budgets);
+  var seen={}; (s.recurring||[]).forEach(function(r){ if(r&&r.id) seen[r.id]=1; });
+  (bs.recurring||[]).forEach(function(r){ if(r&&r.id&&!seen[r.id]){ seen[r.id]=1; s.recurring.push(r); } });
+  var seenK={}; (s.customRules||[]).forEach(function(r){ if(Array.isArray(r)&&r[0]) seenK[String(r[0]).toLowerCase()]=1; });
+  (bs.customRules||[]).forEach(function(r){ if(Array.isArray(r)&&r[0]){ var k=String(r[0]).toLowerCase(); if(!seenK[k]){ seenK[k]=1; s.customRules.push(r); } } });
+}
 
 /* ---- pickers de cuenta ---- */
 var pickTarget=null;
@@ -4765,8 +4792,9 @@ function initSync(){
   if(!SYNC_ON) return;
   if(!(window.supabase&&window.supabase.createClient)){ syncMsg="Sin conexión a la nube."; return; }
   sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
-  sb.auth.getSession().then(function(res){ session=(res.data&&res.data.session)||null; if(session) afterLogin(); else if(V.tab==="set") render(); });
-  sb.auth.onAuthStateChange(function(_e,s){ session=s||null; if(V.tab==="set") render(); });
+  sb.auth.getSession().then(function(res){ session=(res.data&&res.data.session)||null; authKnown=true; if(session) afterLogin(); else renderQuiet(); });
+  sb.auth.onAuthStateChange(function(_e,s){ var had=!!session; session=s||null; authKnown=true;
+    if(V.tab==="set") render(); else if(had!==!!session) renderQuiet(); /* que el aviso de sesión aparezca/desaparezca solo */ });
   window.addEventListener("online",function(){ if(session) pullRemote(); });
   document.addEventListener("visibilitychange",function(){ if(!document.hidden&&session) pullRemote(); });
   window.addEventListener("focus",function(){ if(session) pullRemote(); });
@@ -4860,8 +4888,21 @@ function scheduleSync(){ if(!sb||!session) return; clearTimeout(pushTimer); sync
 function upSync(){ var el=document.getElementById("syncline"); if(el) el.textContent=syncMsg; }
 function mergeDB(local,remote){
   local=local||{}; remote=remote||{};
+  var ls=local.settings||{}, rs=remote.settings||{};
+  var lu=local.updatedAt||0, ru=remote.updatedAt||0;
+  /* BASE VIRGEN: esta base jamás ha empujado (updatedAt 0) y la nube sí tiene
+     historia → los ajustes de la NUBE mandan. Es el caso "iOS purgó el
+     localStorage y volví a iniciar sesión": antes, cada default recién
+     sembrado (budgets {}, recurring [], customRules [], saldo inicial 0,
+     cuentas de fábrica…) PISABA el valor real de la nube y el push inmediato
+     la amputaba — así se perdieron los presupuestos personales y el
+     recurrente de Austin. Lo hecho localmente antes del login sobrevive vía
+     las uniones de abajo (los registros ya se unen por entrada).
+     En operación normal (base establecida) lo local sigue ganando por llave:
+     protege tu edición en vuelo durante el pull previo al push. */
+  var virgin=(lu===0)&&(ru>0);
   var out={schemaVersion:Math.max(local.schemaVersion||1,remote.schemaVersion||1),
-    settings:Object.assign({},remote.settings||{},local.settings||{}),
+    settings:(virgin?Object.assign({},ls,rs):Object.assign({},rs,ls)),
     entries:{},learn:{places:Object.assign({},(remote.learn&&remote.learn.places)||{},(local.learn&&local.learn.places)||{}),
       placeNames:Object.assign({},(remote.learn&&remote.learn.placeNames)||{},(local.learn&&local.learn.placeNames)||{})},
     siriQueue:(function(){
@@ -4879,6 +4920,31 @@ function mergeDB(local,remote){
   var lsm=local.sharedMeta, rsm=remote.sharedMeta;
   out.sharedMeta=(lsm&&rsm)?(((lsm.updatedAt||0)>=(rsm.updatedAt||0))?lsm:rsm):(lsm||rsm);
   out.settings.catET=Object.assign({},(remote.settings&&remote.settings.catET)||{},(local.settings&&local.settings.catET)||{});
+  /* CONTENEDORES ACUMULATIVOS: si el remoto trae un sello MÁS NUEVO que mi
+     último push, hay cambios de otro dispositivo (o soy virgen) → UNIÓN por
+     llave/id, el lado ganador pisa en conflicto — lo agregado en cualquier
+     lado sobrevive (mismo criterio que sharedMeta.budgets desde v6.8.1).
+     Si NO es más nuevo (el caso normal de un solo dispositivo: el blob es mi
+     propio último push), lo local manda tal cual — así BORRAR un presupuesto,
+     un recurrente o una palabra NO resucita en el pull previo al push. */
+  if(ru>lu){
+    var win=virgin?rs:ls, lose=virgin?ls:rs;
+    out.settings.budgets=Object.assign({},lose.budgets||{},win.budgets||{});
+    out.settings.budgetRoll=Object.assign({},lose.budgetRoll||{},win.budgetRoll||{});
+    out.settings.accountColors=Object.assign({},lose.accountColors||{},win.accountColors||{});
+    out.settings.budgetHist=Object.assign({},lose.budgetHist||{},win.budgetHist||{});
+    out.settings.budgetHist[curMonth()]=Object.assign({},out.settings.budgets); /* re-sellar el mes vivo (v6.8.2) */
+    out.settings.recurring=(function(){ var seen={},arr=[];
+      (win.recurring||[]).concat(lose.recurring||[]).forEach(function(r){
+        if(!r) return; var id=r.id||JSON.stringify(r.template||r);
+        if(seen[id]) return; seen[id]=1; arr.push(r); });
+      return arr; })();
+    out.settings.customRules=(function(){ var seen={},arr=[];
+      (win.customRules||[]).concat(lose.customRules||[]).forEach(function(r){
+        if(!Array.isArray(r)||!r[0]) return; var k=String(r[0]).toLowerCase();
+        if(seen[k]) return; seen[k]=1; arr.push(r); });
+      return arr; })();
+  }
   var le=local.entries||{},re=remote.entries||{},keys={};
   Object.keys(le).forEach(function(k){keys[k]=1;}); Object.keys(re).forEach(function(k){keys[k]=1;});
   Object.keys(keys).forEach(function(k){ var a=le[k],b=re[k]; if(a&&b) out.entries[k]=((a.updatedAt||0)>=(b.updatedAt||0))?a:b; else out.entries[k]=a||b; });
